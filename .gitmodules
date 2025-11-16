@@ -1,0 +1,9 @@
+[submodule "PHP-Antimalware-Scanner"]
+	path = PHP-Antimalware-Scanner
+	url = git@github.com:marcocesarato/PHP-Antimalware-Scanner.git
+[submodule "WhatWeb"]
+	path = WhatWeb
+	url = git@github.com:urbanadventurer/WhatWeb.git
+[submodule "domain_analyzer"]
+	path = domain_analyzer
+	url = git@github.com:eldraco/domain_analyzer.git
