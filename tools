@@ -1,0 +1,154 @@
+#!/bin/bash
+
+# Script centralizado para ejecutar herramientas y utilidades
+#
+# Instalación:
+#   1. Copiar o crear enlace simbólico: ln -s /Users/josepgarcia/Developer/Tools/tools ~/bin/tools
+#   2. Dar permisos de ejecución: chmod +x ~/bin/tools
+#   3. Añadir ~/bin al PATH (si no está): echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+#   4. Recargar configuración: source ~/.zshrc
+#
+# Uso: tools <comando> [opciones]
+
+TOOLS_DIR="/Users/josepgarcia/Developer/Tools"
+
+show_help() {
+    echo "Uso: tools <comando> [opciones]"
+    echo ""
+    echo "Comandos de Gestión:"
+    echo "  update               Actualizar todas las herramientas y submódulos"
+    echo ""
+    echo "Comandos de Seguridad:"
+    echo "  whatweb              Identificar tecnologías web"
+    echo "  domain-analyzer      Analizar dominios"
+    echo "  php-scanner          Escanear malware PHP"
+    echo ""
+    echo "Comandos de WordPress:"
+    echo "  wp-create            Crear nueva instalación de WordPress"
+    echo "  wp-delete            Eliminar instalación de WordPress"
+    echo "  wp-setup-env         Configurar entorno (carpeta + BD)"
+    echo "  wp-plugin-create     Crear estructura de nuevo plugin"
+    echo ""
+    echo "Comandos de Backup:"
+    echo "  mysql-backup         Respaldar base de datos MySQL"
+    echo ""
+    echo "Utilidades:"
+    echo "  nmap                 Ejecutar script de nmap"
+    echo "  resize-images        Redimensionar imágenes"
+}
+
+update_tools() {
+    echo "🔄 Actualizando herramientas..."
+    echo ""
+
+    cd "$TOOLS_DIR" || exit 1
+
+    # Actualizar repositorio principal
+    echo "📦 Actualizando repositorio principal..."
+    git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || git pull
+    echo ""
+
+    # Actualizar submódulos
+    echo "🔧 Actualizando submódulos..."
+    git submodule update --init --recursive
+    git submodule update --remote --merge
+    echo ""
+
+    # Actualizar WhatWeb (si tiene Gemfile)
+    if [ -f "$TOOLS_DIR/WhatWeb/Gemfile" ]; then
+        echo "💎 Actualizando WhatWeb (Ruby gems)..."
+        cd "$TOOLS_DIR/WhatWeb"
+        bundle install 2>/dev/null || echo "⚠️  Bundle no instalado, saltando..."
+        cd "$TOOLS_DIR"
+        echo ""
+    fi
+
+    # Actualizar domain_analyzer (si tiene requirements.txt)
+    if [ -f "$TOOLS_DIR/domain_analyzer/requirements.txt" ]; then
+        echo "🐍 Actualizando domain_analyzer (Python packages)..."
+        pip3 install -r "$TOOLS_DIR/domain_analyzer/requirements.txt" --upgrade --quiet 2>/dev/null || \
+        echo "⚠️  No se pudieron actualizar las dependencias de Python"
+        echo ""
+    fi
+
+    # Actualizar PHP-Antimalware-Scanner (si tiene composer.json)
+    if [ -f "$TOOLS_DIR/PHP-Antimalware-Scanner/composer.json" ]; then
+        echo "🐘 Actualizando PHP-Antimalware-Scanner (Composer)..."
+        cd "$TOOLS_DIR/PHP-Antimalware-Scanner"
+        composer update 2>/dev/null || echo "⚠️  Composer no instalado, saltando..."
+        cd "$TOOLS_DIR"
+        echo ""
+    fi
+
+    echo "✅ Actualización completada!"
+    echo ""
+    echo "📊 Estado de los submódulos:"
+    git submodule status
+}
+
+case "$1" in
+    # Gestión
+    update)
+        update_tools
+        ;;
+
+    # Herramientas de seguridad
+    whatweb)
+        shift
+        cd "$TOOLS_DIR/WhatWeb"
+        ./whatweb "$@"
+        ;;
+    domain-analyzer)
+        shift
+        cd "$TOOLS_DIR/domain_analyzer"
+        python domain_analyzer.py "$@"
+        ;;
+    php-scanner)
+        shift
+        cd "$TOOLS_DIR/PHP-Antimalware-Scanner"
+        php scan.php "$@"
+        ;;
+
+    # WordPress
+    wp-create)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-create.sh" "$@"
+        ;;
+    wp-delete)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-delete.sh" "$@"
+        ;;
+    wp-setup-env)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-setup-env.sh" "$@"
+        ;;
+    wp-plugin-create)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-plugin-create.sh" "$@"
+        ;;
+
+    # Backup
+    mysql-backup)
+        shift
+        "$TOOLS_DIR/scripts/backup/mysql_backup.sh" "$@"
+        ;;
+
+    # Utilidades
+    nmap)
+        shift
+        "$TOOLS_DIR/scripts/utilities/nmap.sh" "$@"
+        ;;
+    resize-images)
+        shift
+        "$TOOLS_DIR/scripts/utilities/redimensionar_imagenes.sh" "$@"
+        ;;
+
+    -h|--help|help)
+        show_help
+        ;;
+
+    *)
+        show_help
+        exit 1
+        ;;
+esac

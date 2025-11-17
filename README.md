@@ -1,5 +1,3 @@
-# Tools
-
 ```
  _____ ___   ___  _     ____
 |_   _/ _ \ / _ \| |   / ___|
@@ -17,7 +15,7 @@ Colección de herramientas y scripts de seguridad y utilidades.
   - `backup/`: Scripts de respaldo de bases de datos
   - `utilities/`: Utilidades generales (nmap, procesamiento de imágenes, etc.)
 
-- **: Herramientas de seguridad (submodules)**
+- **Herramientas de seguridad (submodules)**
   - [`domain_analyzer`](security/domain_analyzer): Análisis de dominios
   - [`PHP-Antimalware-Scanner`](security/PHP-Antimalware-Scanner): Escáner de malware PHP
   - [`WhatWeb`](security/WhatWeb): Identificación de tecnologías web
@@ -28,14 +26,12 @@ Colección de herramientas y scripts de seguridad y utilidades.
 
 ```bash
 ./update.sh
-# o
-git pull --recurse-submodules
 ```
 
 ### Añadir nuevo submódulo
 
 ```bash
-git submodule add <URL> <nombre>
+git submodule add <URL>
 ```
 
 ### Usar herramientas de seguridad
