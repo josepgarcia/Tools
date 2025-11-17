@@ -33,6 +33,24 @@ source ~/.zshrc
 tools update
 ```
 
+### Eliminar submódulo "subfinder"
+
+Si necesitas eliminar el submódulo "subfinder", sigue estos pasos:
+
+```bash
+# 1. Desregistrar el submódulo
+git submodule deinit -f subfinder
+
+# 2. Eliminar del índice de git
+git rm -f subfinder
+
+# 3. Eliminar del directorio .git
+rm -rf .git/modules/subfinder
+
+# 4. Commit de los cambios
+git commit -m "Eliminado submódulo: subfinder"
+```
+
 ### Requisitos
 
 - **Git** (con soporte para submódulos)

@@ -7,3 +7,6 @@
 [submodule "domain_analyzer"]
 	path = domain_analyzer
 	url = git@github.com:eldraco/domain_analyzer.git
+[submodule "scripts/WordPress/subfinder"]
+	path = scripts/WordPress/subfinder
+	url = git@github.com:projectdiscovery/subfinder.git
