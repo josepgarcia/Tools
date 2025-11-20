@@ -12,29 +12,38 @@
 
 TOOLS_DIR="/Users/josepgarcia/Developer/Tools"
 
+# Colores
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
 show_help() {
-    echo "Uso: tools <comando> [opciones]"
+    echo -e "${YELLOW}Tools Manager${NC}"
     echo ""
-    echo "Comandos de Gestión:"
-    echo "  update               Actualizar todas las herramientas y submódulos"
+    echo -e "${BLUE}USO:${NC}"
+    echo "    tools <comando> [opciones]"
     echo ""
-    echo "Comandos de Seguridad:"
-    echo "  whatweb              Identificar tecnologías web"
-    echo "  domain-analyzer      Analizar dominios"
-    echo "  php-scanner          Escanear malware PHP"
+    echo -e "${BLUE}Comandos de Gestión:${NC}"
+    echo -e "  ${GREEN}update${NC}               Actualizar todas las herramientas y submódulos"
     echo ""
-    echo "Comandos de WordPress:"
-    echo "  wp-create            Crear nueva instalación de WordPress"
-    echo "  wp-delete            Eliminar instalación de WordPress"
-    echo "  wp-setup-env         Configurar entorno (carpeta + BD)"
-    echo "  wp-plugin-create     Crear estructura de nuevo plugin"
+    echo -e "${BLUE}Comandos de Seguridad:${NC}"
+    echo -e "  ${GREEN}whatweb${NC}              Identificar tecnologías web"
+    echo -e "  ${GREEN}domain-analyzer${NC}      Analizar dominios"
+    echo -e "  ${GREEN}php-scanner${NC}          Escanear malware PHP"
     echo ""
-    echo "Comandos de Backup:"
-    echo "  mysql-backup         Respaldar base de datos MySQL"
+    echo -e "${BLUE}Comandos de WordPress:${NC}"
+    echo -e "  ${GREEN}wp-create${NC}            Crear nueva instalación de WordPress"
+    echo -e "  ${GREEN}wp-delete${NC}            Eliminar instalación de WordPress"
+    echo -e "  ${GREEN}wp-setup-env${NC}         Configurar entorno (carpeta + BD)"
+    echo -e "  ${GREEN}wp-plugin-create${NC}     Crear estructura de nuevo plugin"
     echo ""
-    echo "Utilidades:"
-    echo "  nmap                 Ejecutar script de nmap"
-    echo "  resize-images        Redimensionar imágenes"
+    echo -e "${BLUE}Comandos de Backup:${NC}"
+    echo -e "  ${GREEN}mysql-backup${NC}         Respaldar base de datos MySQL"
+    echo ""
+    echo -e "${BLUE}Utilidades:${NC}"
+    echo -e "  ${GREEN}nmap${NC}                 Ejecutar script de nmap"
+    echo -e "  ${GREEN}resize-images${NC}        Redimensionar imágenes"
 }
 
 update_tools() {
