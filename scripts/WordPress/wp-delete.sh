@@ -17,29 +17,50 @@ echo "| Deleting Wordpress  |"
 echo "+---------------------+"
 echo -e "${NC}"
 
+# Validar que MySQL esté corriendo y se pueda conectar
+printf '\nChecking MySQL connection...\n'
+$mysqlbin -u $DBUSER -p$DBPASS -e '\q' &>/dev/null
+if [ $? -ne 0 ]; then
+  echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
+  echo "Verifica que:"
+  echo "  - MySQL esté corriendo"
+  echo "  - Las credenciales en config.file sean correctas"
+  exit 1
+fi
+echo -e "${GREEN}MySQL connection OK ✅${NC}"
+
 ########### DATABASE
-printf '\n'
-echo "Removing DB"
-#if [[ $? -eq 0 ]]
-#then
-  $mysqlbin -u $DBUSER -p$DBPASS -e "DROP DATABASE $DBNAME;" 2> /dev/null
-  echo -e "${GREEN}Done! ✅${NC}"
-#else
-#  echo -e "${RED}La BD no existe ✅${NC}"
-#fi
+printf '\nRemoving database...\n'
+DB_EXISTS=$($mysqlbin -u $DBUSER -p$DBPASS -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep "$DBNAME")
+if [ -z "$DB_EXISTS" ]; then
+  echo -e "${YELLOW}WARNING: La base de datos '$DBNAME' no existe${NC}"
+else
+  $mysqlbin -u $DBUSER -p$DBPASS -e "DROP DATABASE $DBNAME;" 2>/dev/null
+  if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Database deleted ✅${NC}"
+  else
+    echo -e "${RED}ERROR: No se pudo eliminar la base de datos ❌${NC}"
+    exit 1
+  fi
+fi
 printf '\n'
 ####################
 
 
 ########### FOLDER
-printf '\n'
-echo "Removing FOLDER"
+printf '\nRemoving folder...\n'
 if [[ ! -d $DIRNAME ]]; then
-  echo -e "${RED}Folder does not exist ❌${NC}"
+  echo -e "${YELLOW}WARNING: La carpeta no existe${NC}"
 else
-  rm -rf $DIRNAME 2> /dev/null
-  echo -e "${GREEN}Done! ✅${NC}"
+  rm -rf $DIRNAME 2>/dev/null
+  if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Folder deleted ✅${NC}"
+  else
+    echo -e "${RED}ERROR: No se pudo eliminar la carpeta ❌${NC}"
+    exit 1
+  fi
 fi
 printf '\n'
+echo -e "${GREEN}Process completed 🙌${NC}"
 ####################
 

@@ -17,17 +17,34 @@ echo "| WordPress Installer |"
 echo "+---------------------+"
 echo -e "${NC}"
 
-printf '\nCheck MySQL...\n'
+# Validar que MySQL esté corriendo y se pueda conectar
+printf '\nChecking MySQL connection...\n'
 $mysqlbin -u $DBUSER -p$DBPASS -e '\q' &>/dev/null
 if [ $? -ne 0 ]; then
-  echo -e "${RED}MySQL connection error! ❌${NC}"
+  echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
+  echo "Verifica que:"
+  echo "  - MySQL esté corriendo"
+  echo "  - Las credenciales en config.file sean correctas"
+  echo "  - El usuario tenga permisos suficientes"
   exit 1
 fi
-echo -e "${GREEN}Done! ✅${NC}"
+echo -e "${GREEN}MySQL connection OK ✅${NC}"
 
-printf '\nCreating DB...'
+# Verificar si la base de datos ya existe
+printf '\nChecking if database exists...\n'
+DB_EXISTS=$($mysqlbin -u $DBUSER -p$DBPASS -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep "$DBNAME")
+if [ ! -z "$DB_EXISTS" ]; then
+  echo -e "${RED}ERROR: La base de datos '$DBNAME' ya existe ❌${NC}"
+  exit 1
+fi
+
+printf '\nCreating database...\n'
 $mysqlbin -u $DBUSER -p$DBPASS -e "CREATE DATABASE $DBNAME CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null
-echo -e "${GREEN}Done! ✅${NC}"
+if [ $? -ne 0 ]; then
+  echo -e "${RED}ERROR: No se pudo crear la base de datos ❌${NC}"
+  exit 1
+fi
+echo -e "${GREEN}Database created ✅${NC}"
 printf '\n'
 
 mkdir $DIRNAME
