@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPTPATH=$(dirname "$0")
-source $SCRIPTPATH/config.file
+source $SCRIPTPATH/common.sh
 
 ###############################################
 
@@ -20,12 +20,12 @@ echo -e "${NC}"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf '\nChecking MySQL connection...\n'
-$mysqlbin -u $DBUSER -p$DBPASS -e '\q' &>/dev/null
+check_mysql_connection
 if [ $? -ne 0 ]; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo (brew services start mysql)"
-  echo "  - Las credenciales en config.file sean correctas"
+  echo "  - Las credenciales en common.sh sean correctas"
   echo "  - El puerto sea el correcto"
   exit 1
 fi
@@ -33,8 +33,7 @@ echo -e "${GREEN}MySQL connection OK ✅${NC}"
 
 # Verificar si la base de datos ya existe
 printf '\nChecking if database exists...\n'
-DB_EXISTS=$($mysqlbin -u $DBUSER -p$DBPASS -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep "$DBNAME")
-if [ ! -z "$DB_EXISTS" ]; then
+if check_database_exists "$DBNAME"; then
   echo -e "${RED}ERROR: La base de datos '$DBNAME' ya existe ❌${NC}"
   exit 1
 fi

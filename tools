@@ -23,6 +23,7 @@ TOOLS_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 show_help() {
@@ -105,33 +106,29 @@ update_tools() {
 
 show_menu() {
     clear
-    echo -e "${YELLOW}Tools Manager - Interactive Menu${NC}"
-    echo -e "${BLUE}Gestión:${NC}"
-    echo "  1) Update tools"
-    echo -e "${BLUE}WordPress:${NC}"
-    echo "  2) Create new WordPress site (wp-create)"
-    echo "  3) Delete WordPress site (wp-delete)"
-    echo "  4) Setup Environment (wp-setup-env)"
-    echo "  5) Create Plugin (wp-plugin-create)"
-    echo "  6) Reset Admin User (wp-reset-admin)"
-    echo "  7) DB Backup (wp-db-backup)"
-    echo "  8) DB Restore (wp-db-restore)"
-    echo ""
-    echo -e "${BLUE}Seguridad:${NC}"
-    echo "  9) WhatWeb Scan"
-    echo "  10) Domain Analyzer"
-    echo "  11) PHP Malware Scanner"
-    echo -e "${BLUE}Opciones:${NC}"
-    echo "  q) Quit"
+    echo -e "${BLUE}================================================${NC}"
+    echo -e "${BLUE}Tools Manager - Interactive Menú${NC}"
+    echo -e "${BLUE}================================================${NC}"
+    echo -e "${YELLOW}WordPress:${NC}"
+    echo -e "  ${GREEN}1)${NC} Create new WordPress site (wp-create)"
+    echo -e "  ${GREEN}2)${NC} Delete WordPress site (wp-delete)"
+    echo -e "  ${GREEN}3)${NC} Setup Environment (wp-setup-env)"
+    echo -e "  ${GREEN}4)${NC} Create Plugin (wp-plugin-create)"
+    echo -e "  ${GREEN}5)${NC} Reset Admin User (wp-reset-admin)"
+    echo -e "  ${GREEN}6)${NC} DB Backup (wp-db-backup)"
+    echo -e "  ${GREEN}7)${NC} DB Restore (wp-db-restore)"
+    echo -e "${YELLOW}Otros:${NC}"
+    echo -e "  ${GREEN}10)${NC} Update tools"
+    echo -e "  ${GREEN}11)${NC} WhatWeb Scan"
+    echo -e "  ${GREEN}12)${NC} Domain Analyzer"
+    echo -e "  ${GREEN}13)${NC} PHP Malware Scanner"
+    echo -e "  ${RED}q)${NC} Quit"
     echo ""
     read -p "Select an option: " choice
     echo ""
 
     case $choice in
         1)
-            "$0" update
-            ;;
-        2)
             read -p "Project Name: " project_name
             if [ -n "$project_name" ]; then
                 "$0" wp-create "$project_name"
@@ -139,7 +136,7 @@ show_menu() {
                 echo -e "${YELLOW}Cancelled: No project name provided${NC}"
             fi
             ;;
-        3)
+        2)
             read -p "Project Name (to delete): " project_name
             if [ -n "$project_name" ]; then
                 "$0" wp-delete "$project_name"
@@ -147,7 +144,7 @@ show_menu() {
                 echo -e "${YELLOW}Cancelled: No project name provided${NC}"
             fi
             ;;
-        4)
+        3)
             read -p "Project Name: " project_name
             if [ -n "$project_name" ]; then
                 "$0" wp-setup-env "$project_name"
@@ -155,7 +152,7 @@ show_menu() {
                 echo -e "${YELLOW}Cancelled: No project name provided${NC}"
             fi
             ;;
-        5)
+        4)
             read -p "Plugin Name: " plugin_name
             if [ -n "$plugin_name" ]; then
                 "$0" wp-plugin-create "$plugin_name"
@@ -163,33 +160,36 @@ show_menu() {
                 echo -e "${YELLOW}Cancelled: No plugin name provided${NC}"
             fi
             ;;
-        6)
+        5)
              read -p "User ID to reset [Default: 1]: " user_id
              if [ -z "$user_id" ]; then
                 user_id=1
              fi
              "$0" wp-reset-admin "$user_id"
              ;;
-        7)
+        6)
             read -p "Optional Comment (for filename): " comment
             "$0" wp-db-backup "$comment"
             ;;
-        8)
+        7)
             "$0" wp-db-restore
             ;;
-        9)
+        10)
+            "$0" update
+            ;;
+        11)
             read -p "Target URL: " target
             if [ -n "$target" ]; then
                 "$0" whatweb "$target"
             fi
             ;;
-        10)
+        12)
              read -p "Domain: " domain
             if [ -n "$domain" ]; then
                 "$0" domain-analyzer -d "$domain"
             fi
             ;;
-        11)
+        13)
             read -p "Path to scan: " scan_path
             if [ -n "$scan_path" ]; then
                 "$0" php-scanner "$scan_path"

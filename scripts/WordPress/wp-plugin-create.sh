@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPTPATH=$(dirname "$0")
-source $SCRIPTPATH/config.file
+source $SCRIPTPATH/common.sh
 
 ###############################################
 

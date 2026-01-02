@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPTPATH=$(dirname "$0")
-source $SCRIPTPATH/config.file
+source $SCRIPTPATH/common.sh
 
 ###############################################
 
@@ -19,20 +19,19 @@ echo -e "${NC}"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf '\nChecking MySQL connection...\n'
-$mysqlbin -u $DBUSER -p$DBPASS -e '\q' &>/dev/null
+check_mysql_connection
 if [ $? -ne 0 ]; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo"
-  echo "  - Las credenciales en config.file sean correctas"
+  echo "  - Las credenciales en common.sh sean correctas"
   exit 1
 fi
 echo -e "${GREEN}MySQL connection OK ✅${NC}"
 
 ########### DATABASE
 printf '\nRemoving database...\n'
-DB_EXISTS=$($mysqlbin -u $DBUSER -p$DBPASS -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep "$DBNAME")
-if [ -z "$DB_EXISTS" ]; then
+if ! check_database_exists "$DBNAME"; then
   echo -e "${YELLOW}WARNING: La base de datos '$DBNAME' no existe${NC}"
 else
   $mysqlbin -u $DBUSER -p$DBPASS -e "DROP DATABASE $DBNAME;" 2>/dev/null

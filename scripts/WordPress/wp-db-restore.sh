@@ -3,21 +3,9 @@
 # wp-db-restore.sh
 # Restores a WordPress database from a selected SQL file in the current directory.
 
-###############################################
-# COLORS
-###############################################
-GREEN='\033[0;32m'
-BLUE="\033[1;34m"
-RED="\033[1;31m"
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-mysqlbin="/opt/homebrew/opt/mysql@8.4/bin/mysql"
-
-# Checking if mysql exists, if not try default
-if [ ! -f "$mysqlbin" ]; then
-    mysqlbin="mysql"
-fi
+SCRIPTPATH=$(dirname "$0")
+# Source common logic
+source "$SCRIPTPATH/common.sh"
 
 echo -e "${BLUE}"
 echo "+---------------------+"
@@ -32,27 +20,8 @@ if [ ! -f "wp-config.php" ]; then
 fi
 
 # 1. Read Credentials
-extract_define() {
-  local key=$1
-  local value=$(grep "define.*['\"]$key['\"]" wp-config.php | sed -E "s/.*define\s*\(\s*['\"]$key['\"]\s*,\s*['\"]([^'\"]*)['\"].*/\1/")
-  echo "$value"
-}
-
-DBNAME=$(extract_define "DB_NAME")
-DBUSER=$(extract_define "DB_USER")
-DBPASS=$(extract_define "DB_PASSWORD")
-DBHOST=$(extract_define "DB_HOST")
-
-if [ -z "$DBNAME" ]; then
-    echo -e "${RED}Error reading DB credentials.${NC}"
-    exit 1
-fi
-
-if [ "$DBHOST" != "localhost" ] && [ -n "$DBHOST" ]; then
-  MYSQL_OPTS="-h $DBHOST -u $DBUSER -p$DBPASS"
-else
-  MYSQL_OPTS="-u $DBUSER -p$DBPASS"
-fi
+get_db_credentials_from_config
+MYSQL_OPTS=$(get_mysql_opts)
 
 # 2. List SQL files
 echo "Searching for .sql and .sql.gz files..."

@@ -10,34 +10,14 @@
 # (donde exista wp-config.php)
 #######################################################
 
-###############################################
-# COLORES
-###############################################
-GREEN='\033[0;32m'
-BLUE="\033[1;34m"
-RED="\033[1;31m"
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# wp-reset-admin.sh
+# Resets the password for the admin user (user_id 1 by default)
+# Usage: ./wp-reset-admin.sh [user_id]
 
-###############################################
-# Valores por defecto para el nuevo usuario
-###############################################
-DEFAULT_LOGIN="admin"
-DEFAULT_PASS="123123"
-DEFAULT_EMAIL="admin@admin.com"
-DEFAULT_USER_ID=1
+SCRIPTPATH=$(dirname "$0")
+# Source common logic
+source "$SCRIPTPATH/common.sh"
 
-###############################################
-# Ruta al binario de MySQL
-###############################################
-mysqlbin="/opt/homebrew/opt/mysql@8.4/bin/mysql"
-
-###############################################
-
-# Obtener user_id del primer parámetro o usar el valor por defecto
-USER_ID=${1:-$DEFAULT_USER_ID}
-
-clear
 echo -e "${BLUE}"
 echo "+-------------------------+"
 echo "|   RESET ADMIN USER      |"
@@ -56,30 +36,21 @@ echo -e "${GREEN}wp-config.php encontrado ✅${NC}"
 
 # Extraer datos de conexión desde wp-config.php
 printf '\nLeyendo configuración de wp-config.php...\n'
-
-# Función para extraer valor de define() - soporta comillas simples y dobles
-extract_define() {
-  local key=$1
-  local value=$(grep "define.*['\"]$key['\"]" wp-config.php | sed -E "s/.*define\s*\(\s*['\"]$key['\"]\s*,\s*['\"]([^'\"]*)['\"].*/\1/")
-  echo "$value"
-}
-
-DBNAME=$(extract_define "DB_NAME")
-DBUSER=$(extract_define "DB_USER")
-DBPASS=$(extract_define "DB_PASSWORD")
-DBHOST=$(extract_define "DB_HOST")
+get_db_credentials_from_config
 TABLE_PREFIX=$(grep '^\$table_prefix' wp-config.php | sed -E "s/.*=\s*['\"]([^'\"]*)['\"].*/\1/")
-
-# Validar que se obtuvieron los datos
-if [ -z "$DBNAME" ] || [ -z "$DBUSER" ]; then
-  echo -e "${RED}ERROR: No se pudieron leer los datos de conexión desde wp-config.php ❌${NC}"
-  exit 1
-fi
 
 # Usar prefijo por defecto si no se encontró
 if [ -z "$TABLE_PREFIX" ]; then
   TABLE_PREFIX="wp_"
 fi
+
+# Defaults
+DEFAULT_LOGIN="admin"
+DEFAULT_PASS="123123"
+DEFAULT_EMAIL="admin@admin.com"
+
+# 2. Get User ID (Default: 1)
+USER_ID=${1:-1}
 
 echo -e "${GREEN}Configuración leída correctamente ✅${NC}"
 echo ""
@@ -90,12 +61,8 @@ echo -e "  TABLE_PREFIX: ${YELLOW}$TABLE_PREFIX${NC}"
 echo -e "  Usuario ID:   ${YELLOW}$USER_ID${NC}"
 echo ""
 
-# Construir comando MySQL con host si es diferente de localhost
-if [ "$DBHOST" != "localhost" ] && [ -n "$DBHOST" ]; then
-  MYSQL_CMD="$mysqlbin -h $DBHOST -u $DBUSER -p$DBPASS"
-else
-  MYSQL_CMD="$mysqlbin -u $DBUSER -p$DBPASS"
-fi
+MYSQL_OPTS=$(get_mysql_opts)
+MYSQL_CMD="$mysqlbin $MYSQL_OPTS"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf 'Checking MySQL connection...\n'
