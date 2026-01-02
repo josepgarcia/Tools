@@ -10,7 +10,14 @@
 #
 # Uso: tools <comando> [opciones]
 
-TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the source to handle symlinks
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+TOOLS_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 # Colores
 GREEN='\033[0;32m'
@@ -107,10 +114,13 @@ show_menu() {
     echo "  4) Setup Environment (wp-setup-env)"
     echo "  5) Create Plugin (wp-plugin-create)"
     echo "  6) Reset Admin User (wp-reset-admin)"
+    echo "  7) DB Backup (wp-db-backup)"
+    echo "  8) DB Restore (wp-db-restore)"
+    echo ""
     echo -e "${BLUE}Seguridad:${NC}"
-    echo "  7) WhatWeb Scan"
-    echo "  8) Domain Analyzer"
-    echo "  9) PHP Malware Scanner"
+    echo "  9) WhatWeb Scan"
+    echo "  10) Domain Analyzer"
+    echo "  11) PHP Malware Scanner"
     echo -e "${BLUE}Opciones:${NC}"
     echo "  q) Quit"
     echo ""
@@ -161,18 +171,25 @@ show_menu() {
              "$0" wp-reset-admin "$user_id"
              ;;
         7)
+            read -p "Optional Comment (for filename): " comment
+            "$0" wp-db-backup "$comment"
+            ;;
+        8)
+            "$0" wp-db-restore
+            ;;
+        9)
             read -p "Target URL: " target
             if [ -n "$target" ]; then
                 "$0" whatweb "$target"
             fi
             ;;
-        8)
+        10)
              read -p "Domain: " domain
             if [ -n "$domain" ]; then
                 "$0" domain-analyzer -d "$domain"
             fi
             ;;
-        9)
+        11)
             read -p "Path to scan: " scan_path
             if [ -n "$scan_path" ]; then
                 "$0" php-scanner "$scan_path"
@@ -242,9 +259,13 @@ case "$1" in
         shift
         "$TOOLS_DIR/scripts/WordPress/wp-reset-admin.sh" "$@"
         ;;
-    wp-reset-admin)
+    wp-db-backup)
         shift
-        "$TOOLS_DIR/scripts/WordPress/wp-reset-admin.sh" "$@"
+        "$TOOLS_DIR/scripts/WordPress/wp-db-backup.sh" "$@"
+        ;;
+    wp-db-restore)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-db-restore.sh" "$@"
         ;;
 
     # Backup

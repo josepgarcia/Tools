@@ -129,6 +129,10 @@ tools wp-plugin-create mi-plugin
 
 # Resetear usuario admin (emergencia)
 tools wp-reset-admin [user_id]
+
+# Backup y Restauración de Base de Datos
+tools wp-db-backup [comentario]
+tools wp-db-restore
 ```
 
 ### 💾 Backup
