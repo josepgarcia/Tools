@@ -10,7 +10,7 @@
 #
 # Uso: tools <comando> [opciones]
 
-TOOLS_DIR="/Users/josepgarcia/Developer/Tools"
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colores
 GREEN='\033[0;32m'
@@ -37,6 +37,7 @@ show_help() {
     echo -e "  ${GREEN}wp-delete${NC}            Eliminar instalación de WordPress"
     echo -e "  ${GREEN}wp-setup-env${NC}         Configurar entorno (carpeta + BD)"
     echo -e "  ${GREEN}wp-plugin-create${NC}     Crear estructura de nuevo plugin"
+    echo -e "  ${GREEN}wp-reset-admin${NC}       Resetear usuario admin (ejecutar en carpeta WP)"
     echo ""
     echo -e "${BLUE}Comandos de Backup:${NC}"
     echo -e "  ${GREEN}mysql-backup${NC}         Respaldar base de datos MySQL"
@@ -95,7 +96,109 @@ update_tools() {
     git submodule status
 }
 
+show_menu() {
+    clear
+    echo -e "${YELLOW}Tools Manager - Interactive Menu${NC}"
+    echo -e "${BLUE}Gestión:${NC}"
+    echo "  1) Update tools"
+    echo -e "${BLUE}WordPress:${NC}"
+    echo "  2) Create new WordPress site (wp-create)"
+    echo "  3) Delete WordPress site (wp-delete)"
+    echo "  4) Setup Environment (wp-setup-env)"
+    echo "  5) Create Plugin (wp-plugin-create)"
+    echo "  6) Reset Admin User (wp-reset-admin)"
+    echo -e "${BLUE}Seguridad:${NC}"
+    echo "  7) WhatWeb Scan"
+    echo "  8) Domain Analyzer"
+    echo "  9) PHP Malware Scanner"
+    echo -e "${BLUE}Opciones:${NC}"
+    echo "  q) Quit"
+    echo ""
+    read -p "Select an option: " choice
+    echo ""
+
+    case $choice in
+        1)
+            "$0" update
+            ;;
+        2)
+            read -p "Project Name: " project_name
+            if [ -n "$project_name" ]; then
+                "$0" wp-create "$project_name"
+            else
+                echo -e "${YELLOW}Cancelled: No project name provided${NC}"
+            fi
+            ;;
+        3)
+            read -p "Project Name (to delete): " project_name
+            if [ -n "$project_name" ]; then
+                "$0" wp-delete "$project_name"
+            else
+                echo -e "${YELLOW}Cancelled: No project name provided${NC}"
+            fi
+            ;;
+        4)
+            read -p "Project Name: " project_name
+            if [ -n "$project_name" ]; then
+                "$0" wp-setup-env "$project_name"
+            else
+                echo -e "${YELLOW}Cancelled: No project name provided${NC}"
+            fi
+            ;;
+        5)
+            read -p "Plugin Name: " plugin_name
+            if [ -n "$plugin_name" ]; then
+                "$0" wp-plugin-create "$plugin_name"
+            else
+                echo -e "${YELLOW}Cancelled: No plugin name provided${NC}"
+            fi
+            ;;
+        6)
+             read -p "User ID to reset [Default: 1]: " user_id
+             if [ -z "$user_id" ]; then
+                user_id=1
+             fi
+             "$0" wp-reset-admin "$user_id"
+             ;;
+        7)
+            read -p "Target URL: " target
+            if [ -n "$target" ]; then
+                "$0" whatweb "$target"
+            fi
+            ;;
+        8)
+             read -p "Domain: " domain
+            if [ -n "$domain" ]; then
+                "$0" domain-analyzer -d "$domain"
+            fi
+            ;;
+        9)
+            read -p "Path to scan: " scan_path
+            if [ -n "$scan_path" ]; then
+                "$0" php-scanner "$scan_path"
+            fi
+            ;;
+        q|Q)
+            echo "Bye!"
+            exit 0
+            ;;
+        *)
+            echo "Invalid option"
+            ;;
+    esac
+}
+
+if [ -z "$1" ]; then
+    show_menu
+    exit 0
+fi
+
 case "$1" in
+    # Interactive Menu
+    menu)
+        show_menu
+        ;;
+
     # Gestión
     update)
         update_tools
@@ -134,6 +237,14 @@ case "$1" in
     wp-plugin-create)
         shift
         "$TOOLS_DIR/scripts/WordPress/wp-plugin-create.sh" "$@"
+        ;;
+    wp-reset-admin)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-reset-admin.sh" "$@"
+        ;;
+    wp-reset-admin)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-reset-admin.sh" "$@"
         ;;
 
     # Backup

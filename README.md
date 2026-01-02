@@ -20,10 +20,10 @@ cd ~/Developer/Tools
 # 2. Inicializar submódulos
 git submodule update --init --recursive
 
-# 3. Crear enlace simbólico al comando tools
+# 3. Crear enlace simbólico al comando tools (ajusta la ruta según donde clonaste)
 mkdir -p ~/bin
-ln -s ~/Developer/Tools/tools ~/bin/tools
-chmod +x ~/Developer/Tools/tools
+ln -s $(pwd)/tools ~/bin/tools
+chmod +x $(pwd)/tools
 
 # 4. Añadir ~/bin al PATH (si no está)
 echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
@@ -75,20 +75,19 @@ Tools/
 
 ## 💻 Uso
 
-### Comando Centralizado `tools`
-
-Todas las herramientas están disponibles a través del comando `tools`:
+### Comandos Básicos
 
 ```bash
-tools <comando> [opciones]
-```
+# Iniciar el menú interactivo (por defecto al ejecutar sin argumentos)
+tools
 
-Ver ayuda completa:
-
-```bash
+# Ver ayuda completa y lista de comandos
 tools help
 # o
 tools --help
+
+# Ejecutar menú explícitamente
+tools menu
 ```
 
 ## 📚 Comandos Disponibles
@@ -127,6 +126,9 @@ tools wp-setup-env nombre-proyecto
 
 # Crear estructura de nuevo plugin
 tools wp-plugin-create mi-plugin
+
+# Resetear usuario admin (emergencia)
+tools wp-reset-admin [user_id]
 ```
 
 ### 💾 Backup
