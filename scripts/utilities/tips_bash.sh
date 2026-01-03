@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Some helpful functions
 yell() { echo -e "${RED}FAILED> $* ${NC}" >&2; }
 die() {

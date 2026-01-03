@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 #######################################################
 # WordPress Reset Admin User
 #

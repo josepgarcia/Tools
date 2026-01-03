@@ -373,19 +373,14 @@ execute_docker() {
 
     # Recoger lista completa de entrada y métricas de entrada
     local all_inputs=()
-    if [ "$image_option" == "3" ]; then
-        shopt -s nullglob nocaseglob
-        all_inputs=(*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)
-        shopt -u nullglob nocaseglob
-    elif [ "$image_option" == "1" ]; then
-        shopt -s nullglob nocaseglob
-        all_inputs=(*.jpg *.jpeg *.JPG *.JPEG)
-        shopt -u nullglob nocaseglob
-    else
-        shopt -s nullglob nocaseglob
-        all_inputs=(*.png *.PNG)
-        shopt -u nullglob nocaseglob
-    fi
+    shopt -s nullglob nocaseglob
+    case "$image_option" in
+        1) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG) ;;
+        2) all_inputs=(*.png *.PNG) ;;
+        3) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG *.png *.PNG) ;;
+    esac
+    shopt -u nullglob nocaseglob
+
     for f in "${all_inputs[@]}"; do
         case "${f,,}" in
             *.png) COUNT_PNG=$((COUNT_PNG+1));;
@@ -395,7 +390,8 @@ execute_docker() {
 
     for f in "${all_inputs[@]}"; do
         if [ -f "$f" ]; then
-            local s=$(stat -f%z "$f" 2>/dev/null || echo 0)
+            local s
+            s=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
             INPUT_TOTAL_BYTES=$((INPUT_TOTAL_BYTES + s))
         fi
     done
@@ -409,138 +405,52 @@ execute_docker() {
     else
         info "[dry-run] Omitiendo creación de contenedor"
     fi
-    if [ "$image_option" == "3" ]; then
-        # Procesar JPG
-        shopt -s nullglob nocaseglob
-        jpg_files=(*.jpg *.jpeg)
-        shopt -u nullglob nocaseglob
 
-        if [ ${#jpg_files[@]} -gt 0 ]; then
-            total_files=${#jpg_files[@]}
-            info "Procesando $total_files archivos JPG/JPEG en lotes de $BATCH_SIZE..."
+    # Helper para procesar archivos en lotes
+    process_files() {
+        local files_to_process=("$@")
+        if [ ${#files_to_process[@]} -eq 0 ]; then return; fi
 
-            for ((i=0; i<total_files; i+=BATCH_SIZE)); do
-                batch=("${jpg_files[@]:i:BATCH_SIZE}")
-                batch_num=$((i/BATCH_SIZE + 1))
-                total_batches=$(((total_files + BATCH_SIZE - 1) / BATCH_SIZE))
+        local total_files=${#files_to_process[@]}
+        info "Procesando $total_files archivo(s) en lotes de $BATCH_SIZE..."
 
-                info "  Lote $batch_num de $total_batches (${#batch[@]} archivos)..."
+        for ((i=0; i<total_files; i+=BATCH_SIZE)); do
+            local batch=("${files_to_process[@]:i:BATCH_SIZE}")
+            local batch_num=$((i/BATCH_SIZE + 1))
+            local total_batches=$(((total_files + BATCH_SIZE - 1) / BATCH_SIZE))
 
-                # Filtrar por --skip-existing
-                to_process=()
-                for p in "${batch[@]}"; do
-                    base=$(basename "$p")
-                    name="${base%.*}"
-                    out="out/${name}.${OUTPUT_EXT}"
-                    if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
-                        info "Saltando (más reciente): $out"
-                        continue
-                    fi
-                    to_process+=("$p")
-                done
-                if [ ${#to_process[@]} -eq 0 ]; then
-                    success "  ✓ Lote sin cambios (skip-existing)"
-                elif [ $DRY_RUN -eq 1 ]; then
-                    info "[dry-run] Procesaría ${#to_process[@]} archivo(s)"
-                elif docker exec "$CONTAINER_NAME" squoosh-cli $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{width:${max_width}}" -d "out" "${to_process[@]}"; then
-                    success "  ✓ Lote $batch_num completado"
-                else
-                    warning "  ✗ Error en lote $batch_num"
-                    has_errors=1
+            info "  Lote $batch_num de $total_batches (${#batch[@]} archivos)..."
+
+            # Filtrar por --skip-existing
+            local to_process=()
+            for p in "${batch[@]}"; do
+                local base=$(basename "$p")
+                local name="${base%.*}"
+                local out="out/${name}.${OUTPUT_EXT}"
+                if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
+                    info "Saltando (más reciente): $out"
+                    continue
                 fi
+                to_process+=("$p")
             done
-        fi
 
-        # Procesar PNG
-        shopt -s nullglob nocaseglob
-        png_files=(*.png)
-        shopt -u nullglob nocaseglob
+            if [ ${#to_process[@]} -eq 0 ]; then
+                success "  ✓ Lote sin cambios (skip-existing)"
+            elif [ $DRY_RUN -eq 1 ]; then
+                info "[dry-run] Procesaría ${#to_process[@]} archivo(s)"
+            elif docker exec "$CONTAINER_NAME" squoosh-cli $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{width:${max_width}}" -d "out" "${to_process[@]}"; then
+                success "  ✓ Lote $batch_num completado"
+            else
+                warning "  ✗ Error en lote $batch_num"
+                has_errors=1
+            fi
+        done
+    }
 
-        if [ ${#png_files[@]} -gt 0 ]; then
-            total_files=${#png_files[@]}
-            info "Procesando $total_files archivos PNG en lotes de $BATCH_SIZE..."
-
-            for ((i=0; i<total_files; i+=BATCH_SIZE)); do
-                batch=("${png_files[@]:i:BATCH_SIZE}")
-                batch_num=$((i/BATCH_SIZE + 1))
-                total_batches=$(((total_files + BATCH_SIZE - 1) / BATCH_SIZE))
-
-                info "  Lote $batch_num de $total_batches (${#batch[@]} archivos)..."
-
-                # Filtrar por --skip-existing
-                to_process=()
-                for p in "${batch[@]}"; do
-                    base=$(basename "$p")
-                    name="${base%.*}"
-                    out="out/${name}.${OUTPUT_EXT}"
-                    if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
-                        info "Saltando (más reciente): $out"
-                        continue
-                    fi
-                    to_process+=("$p")
-                done
-                if [ ${#to_process[@]} -eq 0 ]; then
-                    success "  ✓ Lote sin cambios (skip-existing)"
-                elif [ $DRY_RUN -eq 1 ]; then
-                    info "[dry-run] Procesaría ${#to_process[@]} archivo(s)"
-                elif docker exec "$CONTAINER_NAME" squoosh-cli $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{width:${max_width}}" -d "out" "${to_process[@]}"; then
-                    success "  ✓ Lote $batch_num completado"
-                else
-                    warning "  ✗ Error en lote $batch_num"
-                    has_errors=1
-                fi
-            done
-        fi
+    if [ ${#all_inputs[@]} -gt 0 ]; then
+        process_files "${all_inputs[@]}"
     else
-        # Obtener lista de archivos según el tipo seleccionado
-        shopt -s nullglob nocaseglob
-        if [ "$image_option" == "1" ]; then
-            input_files=(*.jpg *.jpeg)
-        else
-            input_files=(*.png)
-        fi
-        shopt -u nullglob nocaseglob
-
-        if [ ${#input_files[@]} -gt 0 ]; then
-            total_files=${#input_files[@]}
-            info "Procesando $total_files archivo(s) en lotes de $BATCH_SIZE..."
-            echo ""
-
-            # Procesar en lotes
-            for ((i=0; i<total_files; i+=BATCH_SIZE)); do
-                batch=("${input_files[@]:i:BATCH_SIZE}")
-                batch_num=$((i/BATCH_SIZE + 1))
-                total_batches=$(((total_files + BATCH_SIZE - 1) / BATCH_SIZE))
-
-                info "Lote $batch_num de $total_batches (${#batch[@]} archivos)..."
-
-                # Filtrar por --skip-existing
-                to_process=()
-                for p in "${batch[@]}"; do
-                    base=$(basename "$p")
-                    name="${base%.*}"
-                    out="out/${name}.${OUTPUT_EXT}"
-                    if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
-                        info "Saltando (más reciente): $out"
-                        continue
-                    fi
-                    to_process+=("$p")
-                done
-                if [ ${#to_process[@]} -eq 0 ]; then
-                    success "✓ Lote sin cambios (skip-existing)"
-                elif [ $DRY_RUN -eq 1 ]; then
-                    info "[dry-run] Procesaría ${#to_process[@]} archivo(s)"
-                elif docker exec "$CONTAINER_NAME" squoosh-cli $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{width:${max_width}}" -d "out" "${to_process[@]}"; then
-                    success "✓ Lote $batch_num completado"
-                else
-                    warning "✗ Error en lote $batch_num"
-                    has_errors=1
-                fi
-                echo ""
-            done
-        else
-            error "No se encontraron archivos para procesar."
-        fi
+        error "No se encontraron archivos para procesar."
     fi
 
     echo ""
@@ -550,7 +460,7 @@ execute_docker() {
         if ls out/* >/dev/null 2>&1; then
             for f in out/*; do
                 [ -f "$f" ] || continue
-                s=$(stat -f%z "$f" 2>/dev/null || echo 0)
+                s=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
                 OUTPUT_TOTAL_BYTES=$((OUTPUT_TOTAL_BYTES + s))
             done
         fi
@@ -572,7 +482,7 @@ execute_docker() {
         if [ -d "out" ]; then
             echo ""
             info "Resumen de archivos generados:"
-            file_count=$(ls -1 out/ | wc -l | tr -d ' ')
+            file_count=$(ls -1q out/ | wc -l | tr -d ' ')
             total_size=$(du -sh out/ | cut -f1)
             echo "  - Total de archivos: $file_count"
             echo "  - Tamaño total: $total_size"
@@ -584,7 +494,7 @@ execute_docker() {
                 in_mb=$(awk -v b=$INPUT_TOTAL_BYTES 'BEGIN{printf "%.2f", b/1048576}')
                 out_mb=$(awk 'BEGIN{print 0}')
                 if ls out/* >/dev/null 2>&1; then
-                    out_mb=$(du -sk out/ | awk '{printf $1/1024}')
+                    out_mb=$(du -sk out/ | awk '{printf "%.1f", $1/1024}')
                 fi
                 saved=$(awk -v a=$in_mb -v b=$out_mb 'BEGIN{d=a-b; if(d<0)d=0; printf "%.2f", d}')
                 echo "  - Tamaño entrada aprox: ${in_mb}MB"

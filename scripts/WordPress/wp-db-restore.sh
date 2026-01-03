@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # wp-db-restore.sh
 # Restores a WordPress database from a selected SQL file in the current directory.
 

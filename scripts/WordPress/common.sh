@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # common.sh
 # Shared functions and variables for WordPress scripts
 

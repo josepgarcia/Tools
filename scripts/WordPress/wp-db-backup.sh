@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # wp-db-backup.sh
 # Creates a backup of the current WordPress database
 # Naming convention: backup_FOLDER_X_COMMENT_TIMESTAMP.sql.gz

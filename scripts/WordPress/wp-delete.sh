@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPTPATH=$(dirname "$0")
 source $SCRIPTPATH/common.sh
 

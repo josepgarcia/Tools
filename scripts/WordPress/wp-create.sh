@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPTPATH=$(dirname "$0")
 source $SCRIPTPATH/common.sh
 
@@ -81,14 +83,33 @@ perl -pi -e "s/\'wp_\'/\'wp${RAND_DB}_\'/g" wp-config.php
 # sed -i "" "s/localhost/localhost/g" wp-config.php
 
 #   Set authentication unique keys and salts in wp-config.php
-perl -i -pe '
-  BEGIN {
-    @chars = ("a" .. "z", "A" .. "Z", 0 .. 9);
-    push @chars, split //, "!@#$%^&*()-_ []{}<>~\`+=,.;:/?|";
-    sub salt { join "", map $chars[ rand @chars ], 1 .. 64 }
-  }
-  s/put your unique phrase here/salt()/ge
-' wp-config.php
+echo "Setting authentication unique keys and salts..."
+# Fetch new salts from the WordPress.org API
+SALTS=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
+if [[ -z "$SALTS" ]]; then
+  echo -e "${RED}ERROR: Failed to fetch salts from WordPress.org API ❌${NC}"
+  exit 1
+fi
+
+# Create a temp file
+TMP_FILE=$(mktemp)
+
+# Use grep to find the start and end lines of the salt block to replace
+START_LINE=$(grep -n "define( 'AUTH_KEY'" wp-config.php | cut -d: -f1)
+END_LINE=$(grep -n "define( 'NONCE_SALT'" wp-config.php | cut -d: -f1)
+
+if [[ -z "$START_LINE" || -z "$END_LINE" ]]; then
+    echo -e "${RED}ERROR: Could not find salt block placeholder in wp-config.php ❌${NC}"
+    exit 1
+fi
+
+# Replace the placeholder block with the new salts
+head -n $((START_LINE - 1)) wp-config.php > "$TMP_FILE"
+echo "$SALTS" >> "$TMP_FILE"
+tail -n +$((END_LINE + 1)) wp-config.php >> "$TMP_FILE"
+
+# Overwrite the original file
+mv "$TMP_FILE" wp-config.php
 
 echo -e "${GREEN}Done! ✅${NC}"
 printf '\n'
