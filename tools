@@ -122,6 +122,9 @@ show_menu() {
     echo -e "  ${GREEN}11)${NC} WhatWeb Scan"
     echo -e "  ${GREEN}12)${NC} Domain Analyzer"
     echo -e "  ${GREEN}13)${NC} PHP Malware Scanner"
+    echo -e "  ${GREEN}14)${NC} MySQL Backup"
+    echo -e "  ${GREEN}15)${NC} Nmap Scan"
+    echo -e "  ${GREEN}16)${NC} Resize Images"
     echo -e "  ${RED}q)${NC} Quit"
     echo ""
     read -p "Select an option: " choice
@@ -194,6 +197,15 @@ show_menu() {
             if [ -n "$scan_path" ]; then
                 "$0" php-scanner "$scan_path"
             fi
+            ;;
+        14)
+            "$0" mysql-backup
+            ;;
+        15)
+            "$0" nmap
+            ;;
+        16)
+            "$0" resize-images
             ;;
         q|Q)
             echo "Bye!"
@@ -271,7 +283,7 @@ case "$1" in
     # Backup
     mysql-backup)
         shift
-        "$TOOLS_DIR/scripts/backup/mysql_backup.sh" "$@"
+        "$TOOLS_DIR/scripts/utilities/mysql_backup.sh" "$@"
         ;;
 
     # Utilidades
