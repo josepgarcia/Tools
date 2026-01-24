@@ -148,8 +148,12 @@ tools mysql-backup nombre-bd
 # Ejecutar escaneo con nmap
 tools nmap [opciones]
 
-# Redimensionar imágenes
+# Redimensionar imágenes (Versión Interactiva)
 tools resize-images /ruta/a/imagenes
+
+# Redimensionar imágenes (Versión CLI rápida con Sharp)
+# Soporta: --width, --height, --format, --no-folder, -artero, etc.
+tools resize-images-cli [opciones] /ruta/a/imagenes
 ```
 
 ## 📖 Uso Directo de Herramientas
@@ -175,6 +179,22 @@ php scan.php /path/to/scan
 ```bash
 cd ~/Developer/Tools/WhatWeb
 ./whatweb example.com
+```
+
+### Resize Images CLI (Sharp)
+
+Herramienta de alto rendimiento basada en Node.js (sharp).
+
+```bash
+# Ejemplo: Redimensionar a 800px de ancho, calidad 80, guardar en la misma carpeta
+tools resize-images-cli --width=800 --jpg-quality=80 --no-folder /ruta/a/imagenes
+
+# Opciones principales:
+#   --width=PX, --height=PX    Dimensiones máximas
+#   --format=EXT               Formato salida (jpg, webp, avif)
+#   --no-folder                Guarda con sufijo _resized en la misma carpeta
+#   -artero                    Rota 90º antihorario imágenes apaisadas
+#   --skip-existing            Salta imágenes ya procesadas
 ```
 
 ## 🔄 Gestión de Submódulos
