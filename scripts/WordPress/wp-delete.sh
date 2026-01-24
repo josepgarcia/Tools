@@ -21,8 +21,7 @@ echo -e "${NC}"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf '\nChecking MySQL connection...\n'
-check_mysql_connection
-if [ $? -ne 0 ]; then
+if ! check_mysql_connection; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo"
@@ -36,8 +35,7 @@ printf '\nRemoving database...\n'
 if ! check_database_exists "$DBNAME"; then
   echo -e "${YELLOW}WARNING: La base de datos '$DBNAME' no existe${NC}"
 else
-  $mysqlbin -u $DBUSER -p$DBPASS -e "DROP DATABASE $DBNAME;" 2>/dev/null
-  if [ $? -eq 0 ]; then
+  if $mysqlbin -u $DBUSER -p$DBPASS -e "DROP DATABASE $DBNAME;" 2>/dev/null; then
     echo -e "${GREEN}Database deleted ✅${NC}"
   else
     echo -e "${RED}ERROR: No se pudo eliminar la base de datos ❌${NC}"
@@ -53,8 +51,7 @@ printf '\nRemoving folder...\n'
 if [[ ! -d $DIRNAME ]]; then
   echo -e "${YELLOW}WARNING: La carpeta no existe${NC}"
 else
-  rm -rf $DIRNAME 2>/dev/null
-  if [ $? -eq 0 ]; then
+  if rm -rf $DIRNAME 2>/dev/null; then
     echo -e "${GREEN}Folder deleted ✅${NC}"
   else
     echo -e "${RED}ERROR: No se pudo eliminar la carpeta ❌${NC}"

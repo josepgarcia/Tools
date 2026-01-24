@@ -67,7 +67,7 @@ fi
 
 # Function to validate MySQL connection
 check_mysql_connection() {
-  $mysqlbin -u $DBUSER -p$DBPASS -e '\q' &>/dev/null
+  $mysqlbin -u $DBUSER -p$DBPASS -e "SELECT 1;" &>/dev/null
   return $?
 }
 

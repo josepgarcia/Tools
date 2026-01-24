@@ -46,6 +46,12 @@ show_help() {
     echo -e "  ${GREEN}wp-setup-env${NC}         Configurar entorno (carpeta + BD)"
     echo -e "  ${GREEN}wp-plugin-create${NC}     Crear estructura de nuevo plugin"
     echo -e "  ${GREEN}wp-reset-admin${NC}       Resetear usuario admin (ejecutar en carpeta WP)"
+    echo -e "  ${GREEN}wp-optimize${NC}          Optimizar base de datos WordPress"
+    echo ""
+    echo -e "${BLUE}Comandos Web / Auditoría:${NC}"
+    echo -e "  ${GREEN}lighthouse${NC}           Ejecutar auditoría de Lighthouse"
+    echo -e "  ${GREEN}mixed-content${NC}        Detectar contenido mixto (HTTP)"
+    echo -e "  ${GREEN}link-checker${NC}         Detectar enlaces rotos (404)"
     echo ""
     echo -e "${BLUE}Comandos de Backup:${NC}"
     echo -e "  ${GREEN}mysql-backup${NC}         Respaldar base de datos MySQL"
@@ -53,6 +59,7 @@ show_help() {
     echo -e "${BLUE}Utilidades:${NC}"
     echo -e "  ${GREEN}nmap${NC}                 Ejecutar script de nmap"
     echo -e "  ${GREEN}resize-images${NC}        Redimensionar imágenes"
+    echo -e "  ${GREEN}resize-images-cli${NC}    Redimensionar imágenes CLI (rápido)"
 }
 
 update_tools() {
@@ -112,11 +119,16 @@ show_menu() {
     echo -e "${YELLOW}WordPress:${NC}"
     echo -e "  ${GREEN}1)${NC} Create new WordPress site (wp-create)"
     echo -e "  ${GREEN}2)${NC} Delete WordPress site (wp-delete)"
-    echo -e "  ${GREEN}3)${NC} Setup Environment (wp-setup-env)"
+    echo -e "  ${GREEN}3)${NC} [DUPLICATOR] Setup Environment (wp-setup-env)"
     echo -e "  ${GREEN}4)${NC} Create Plugin (wp-plugin-create)"
     echo -e "  ${GREEN}5)${NC} Reset Admin User (wp-reset-admin)"
     echo -e "  ${GREEN}6)${NC} DB Backup (wp-db-backup)"
     echo -e "  ${GREEN}7)${NC} DB Restore (wp-db-restore)"
+    echo -e "  ${GREEN}8)${NC} Optimize DB (wp-optimize)"
+    echo -e "${YELLOW}Auditoría Web:${NC}"
+    echo -e "  ${GREEN}20)${NC} Lighthouse Audit (lighthouse)"
+    echo -e "  ${GREEN}21)${NC} Mixed Content Scan (mixed-content)"
+    echo -e "  ${GREEN}22)${NC} Link Checker (link-checker)"
     echo -e "${YELLOW}Otros:${NC}"
     echo -e "  ${GREEN}10)${NC} Update tools"
     echo -e "  ${GREEN}11)${NC} WhatWeb Scan"
@@ -125,6 +137,7 @@ show_menu() {
     echo -e "  ${GREEN}14)${NC} MySQL Backup"
     echo -e "  ${GREEN}15)${NC} Nmap Scan"
     echo -e "  ${GREEN}16)${NC} Resize Images"
+    echo -e "  ${GREEN}17)${NC} Resize Images CLI"
     echo -e "  ${RED}q)${NC} Quit"
     echo ""
     read -p "Select an option: " choice
@@ -177,6 +190,27 @@ show_menu() {
         7)
             "$0" wp-db-restore
             ;;
+        8)
+            "$0" wp-optimize
+            ;;
+        20)
+            read -p "URL to Audit (or file): " target
+            if [ -n "$target" ]; then
+                "$0" lighthouse "$target"
+            fi
+            ;;
+        21)
+            read -p "URL to Scan: " target
+            if [ -n "$target" ]; then
+                "$0" mixed-content "$target"
+            fi
+            ;;
+        22)
+            read -p "URL to Scan: " target
+            if [ -n "$target" ]; then
+                "$0" link-checker "$target"
+            fi
+            ;;
         10)
             "$0" update
             ;;
@@ -206,6 +240,9 @@ show_menu() {
             ;;
         16)
             "$0" resize-images
+            ;;
+        17)
+            "$0" resize-images-cli
             ;;
         q|Q)
             echo "Bye!"
@@ -279,6 +316,22 @@ case "$1" in
         shift
         "$TOOLS_DIR/scripts/WordPress/wp-db-restore.sh" "$@"
         ;;
+    wp-optimize)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-optimize.sh" "$@"
+        ;;
+    lighthouse)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-lighthouse.sh" "$@"
+        ;;
+    mixed-content)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-mixed-content.sh" "$@"
+        ;;
+    link-checker)
+        shift
+        "$TOOLS_DIR/scripts/WordPress/wp-link-checker.sh" "$@"
+        ;;
 
     # Backup
     mysql-backup)
@@ -294,6 +347,10 @@ case "$1" in
     resize-images)
         shift
         "$TOOLS_DIR/scripts/utilities/redimensionar_imagenes.sh" "$@"
+        ;;
+    resize-images-cli)
+        shift
+        "$TOOLS_DIR/scripts/utilities/redimensionar_imagenes_cli.sh" "$@"
         ;;
 
     -h|--help|help)

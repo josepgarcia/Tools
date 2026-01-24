@@ -22,8 +22,7 @@ echo -e "${NC}"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf '\nChecking MySQL connection...\n'
-check_mysql_connection
-if [ $? -ne 0 ]; then
+if ! check_mysql_connection; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo (brew services start mysql)"
@@ -41,8 +40,7 @@ if check_database_exists "$DBNAME"; then
 fi
 
 printf '\nCreating database...\n'
-$mysqlbin -u $DBUSER -p$DBPASS -e "CREATE DATABASE $DBNAME CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null
-if [ $? -ne 0 ]; then
+if ! $mysqlbin -u $DBUSER -p$DBPASS -e "CREATE DATABASE $DBNAME CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null; then
   echo -e "${RED}ERROR: No se pudo crear la base de datos ❌${NC}"
   exit 1
 fi
@@ -55,8 +53,7 @@ if [[ -d $DIRNAME ]]; then
 fi
 
 printf '\nCreating folder...\n'
-mkdir $DIRNAME
-if [ $? -ne 0 ]; then
+if ! mkdir $DIRNAME; then
   echo -e "${RED}ERROR: No se pudo crear la carpeta ❌${NC}"
   exit 1
 fi

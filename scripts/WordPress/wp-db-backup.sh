@@ -82,9 +82,7 @@ FILENAME="backup_${FOLDER_NAME}_${NEXT_X}${COMMENT}_${TIMESTAMP}.sql.gz"
 # 7. Execute Dump
 echo -e "Backing up database ${YELLOW}$DBNAME${NC} to ${YELLOW}$FILENAME${NC}..."
 
-$mysqldumpbin $MYSQL_OPTS --add-drop-table "$DBNAME" | gzip > "$FILENAME"
-
-if [ $? -eq 0 ]; then
+if $mysqldumpbin $MYSQL_OPTS --add-drop-table "$DBNAME" | gzip > "$FILENAME"; then
     echo -e "${GREEN}Backup created successfully! ✅${NC}"
     echo ""
     echo -e "${BLUE}Available Backups:${NC}"

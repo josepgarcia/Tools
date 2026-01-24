@@ -68,8 +68,7 @@ MYSQL_CMD="$mysqlbin $MYSQL_OPTS"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf 'Checking MySQL connection...\n'
-$MYSQL_CMD -e '\q' &>/dev/null
-if [ $? -ne 0 ]; then
+if ! $MYSQL_CMD -e '\q' &>/dev/null; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo"
@@ -80,8 +79,7 @@ echo -e "${GREEN}MySQL connection OK ✅${NC}"
 
 # Verificar si la base de datos existe
 printf '\nChecking if database exists...\n'
-DB_EXISTS=$($MYSQL_CMD -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep "$DBNAME")
-if [ -z "$DB_EXISTS" ]; then
+if ! $MYSQL_CMD -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep -q "$DBNAME"; then
   echo -e "${RED}ERROR: La base de datos '$DBNAME' no existe ❌${NC}"
   exit 1
 fi
@@ -91,7 +89,7 @@ USERS_TABLE="${TABLE_PREFIX}users"
 
 # Verificar si el usuario existe
 printf '\nChecking if user ID=%s exists...\n' "$USER_ID"
-USER_EXISTS=$($MYSQL_CMD -N -e "SELECT ID FROM $DBNAME.$USERS_TABLE WHERE ID=$USER_ID;" 2>/dev/null)
+USER_EXISTS=$($MYSQL_CMD -N -e "SELECT ID FROM $DBNAME.$USERS_TABLE WHERE ID=$USER_ID;" 2>/dev/null || true)
 
 if [ -z "$USER_EXISTS" ]; then
   echo -e "${RED}ERROR: El usuario con ID=$USER_ID no existe ❌${NC}"
@@ -126,7 +124,7 @@ fi
 
 # Ejecutar el UPDATE
 printf '\nUpdating user...\n'
-$MYSQL_CMD -e "
+if ! $MYSQL_CMD -e "
 UPDATE $DBNAME.$USERS_TABLE
 SET
   user_login = '$DEFAULT_LOGIN',
@@ -134,9 +132,7 @@ SET
   user_nicename = '$DEFAULT_LOGIN',
   user_email = '$DEFAULT_EMAIL'
 WHERE ID = $USER_ID;
-" 2>/dev/null
-
-if [ $? -ne 0 ]; then
+" 2>/dev/null; then
   echo -e "${RED}ERROR: No se pudo actualizar el usuario ❌${NC}"
   exit 1
 fi

@@ -3,9 +3,9 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# Script para redimensionar imágenes usando Docker y squoosh-cli
-# Autor: Josep Garcia
-# Fecha: 17 de octubre de 2025
+# Script para redimensionar imágenes usando sharp-cli (Node.js)
+# Autor: Josep Garcia (Adaptado a CLI por Antigravity)
+# Fecha: 24 de enero de 2026
 
 # Colores para output
 RED='\033[0;31m'
@@ -14,12 +14,22 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Asegurar que el PATH incluye rutas comunes (necesario para Automator/Acciones Rápidas)
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 # Flags, métricas y logging
 ARTERO_MODE=0
 ASSUME_YES=0
 QUIET=0
 DRY_RUN=0
 SKIP_EXISTING=0
+NO_FOLDER=0
+OUTPUT_EXT=""
+OUTPUT_EXT=""
+max_width=""
+max_height=""
+image_option=""
+FILE_LIST=()
 
 # Calidades configurables desde el script
 JPG_QUALITY=80
@@ -56,8 +66,13 @@ Opciones:
   --jpg-quality=NN    Calidad JPEG (0-100), defecto ${JPG_QUALITY}
   --webp-quality=NN   Calidad WebP (0-100), defecto ${WEBP_QUALITY}
   --avif-quality=NN   Calidad AVIF (0-100), defecto ${AVIF_QUALITY}
+  --format=EXT        Formato de salida (jpg, webp, avif)
+  --width=PX          Anchura máxima
+  --height=PX         Altura máxima
+  --no-folder         Guarda en la misma carpeta con sufijo _resized
 
 Nota: rotación para WEBP/AVIF requiere ImageMagick reciente (magick/mogrify).
+      Este script requiere Node.js y sharp-cli disponible vía npx.
 EOF
 }
 
@@ -72,10 +87,40 @@ parse_args() {
             --jpg-quality=*) JPG_QUALITY="${arg#*=}" ;;
             --webp-quality=*) WEBP_QUALITY="${arg#*=}" ;;
             --avif-quality=*) AVIF_QUALITY="${arg#*=}" ;;
+            --format=*) OUTPUT_EXT="${arg#*=}" ;;
+            --width=*) max_width="${arg#*=}" ;;
+            --height=*) max_height="${arg#*=}" ;;
+            --no-folder) NO_FOLDER=1 ;;
             -h|--help) print_help; exit 0 ;;
-            *) ;;
+            -*) ;;
+            *) FILE_LIST+=("$arg") ;;
         esac
     done
+
+    # Mapear formato a variables necesarias si se pasó por flag
+    if [ -n "$OUTPUT_EXT" ]; then
+        case "$OUTPUT_EXT" in
+            jpg|jpeg)
+                OUTPUT_FORMAT="jpeg"
+                OUTPUT_QUALITY="$JPG_QUALITY"
+                OUTPUT_EXT="jpg"
+                OUTPUT_DIR="out-jpg"
+                ;;
+            webp)
+                OUTPUT_FORMAT="webp"
+                OUTPUT_QUALITY="$WEBP_QUALITY"
+                OUTPUT_EXT="webp"
+                OUTPUT_DIR="out-webp"
+                ;;
+            avif)
+                OUTPUT_FORMAT="avif"
+                OUTPUT_QUALITY="$AVIF_QUALITY"
+                OUTPUT_EXT="avif"
+                OUTPUT_DIR="out-avif"
+                ;;
+            *) error "Formato no soportado: $OUTPUT_EXT" ;;
+        esac
+    fi
 
     # Validaciones de calidad
     for pair in "JPG_QUALITY" "WEBP_QUALITY" "AVIF_QUALITY"; do
@@ -89,7 +134,8 @@ parse_args() {
 # Función para mostrar mensajes de error
 error() {
     local msg="$1"
-    [ $QUIET -eq 0 ] && echo -e "${RED}[ERROR]${NC} $msg" >&2 || true
+    # Siempre imprimir errores a stderr, incluso en modo QUIET
+    echo -e "${RED}[ERROR]${NC} $msg" >&2
     log_line "ERROR $msg"
     exit 1
 }
@@ -115,19 +161,19 @@ warning() {
     log_line "WARN  $msg"
 }
 
-# Comprobar si Docker está corriendo
-check_docker() {
-    info "Comprobando si Docker está corriendo..."
+# Comprobar si Node y npx están disponibles
+check_dependencies() {
+    info "Comprobando dependencias (Node.js)..."
 
-    if ! command -v docker &> /dev/null; then
-        error "Docker no está instalado en el sistema."
+    if ! command -v node &> /dev/null; then
+        error "Node.js no está instalado en el sistema."
     fi
 
-    if ! docker info &> /dev/null; then
-        error "Docker no está corriendo. Por favor, inicia Docker Desktop y vuelve a intentarlo."
+    if ! command -v npx &> /dev/null; then
+        error "npx no está disponible. Asegúrate de tener npm instalado."
     fi
 
-    success "Docker está corriendo correctamente."
+    success "Node.js y npx están disponibles."
 }
 
 # Función para auto-rotar imágenes según EXIF
@@ -149,8 +195,6 @@ fix_orientation() {
         local orientation=$(sips -g pixelHeight -g pixelWidth -g orientation "$img" 2>/dev/null | grep "orientation:" | awk '{print $2}')
 
         if [ -n "$orientation" ] && [ "$orientation" != "1" ]; then
-            # Orientation 1 = Normal, otros valores necesitan rotación
-            # sips -r auto rota automáticamente según EXIF y resetea la orientación a 1
             if [ $DRY_RUN -eq 1 ]; then
                 info "[dry-run] Autorotaría: $img"
             elif sips -r "$img" &>/dev/null; then
@@ -189,6 +233,7 @@ rotate_artero_outputs() {
             if [[ -n "$w" && -n "$h" && "$w" -gt "$h" ]]; then
                 if sips --rotate 270 "$f" >/dev/null 2>&1; then
                     rotated_ok=1
+                    ((ROTATED_COUNT++))
                 else
                     warning "Fallo al rotar: $f"
                 fi
@@ -204,6 +249,7 @@ rotate_artero_outputs() {
                     local tmp="$f.tmp"
                     if magick "$f" -rotate -90 "$tmp" >/dev/null 2>&1 && mv "$tmp" "$f"; then
                         rotated_ok=1
+                        ((ROTATED_COUNT++))
                     else
                         rm -f "$tmp" 2>/dev/null || true
                         warning "Fallo al rotar: $f"
@@ -218,6 +264,7 @@ rotate_artero_outputs() {
                 if [[ -n "$w" && -n "$h" && "$w" -gt "$h" ]]; then
                     if mogrify -rotate -90 "$f" >/dev/null 2>&1; then
                         rotated_ok=1
+                        ((ROTATED_COUNT++))
                     else
                         warning "Fallo al rotar: $f"
                     fi
@@ -279,6 +326,13 @@ ask_image_type() {
     success "Se encontraron ${#files[@]} archivo(s) para procesar."
 }
 
+# Función para recoger archivos pasados por argumento
+collect_files_from_args() {
+    files=("${FILE_LIST[@]}")
+    IMAGE_EXTENSION="custom"
+    success "Se recibieron ${#files[@]} archivo(s) por argumento."
+}
+
 # Función para solicitar la anchura máxima
 ask_max_width() {
     echo ""
@@ -298,23 +352,30 @@ ask_max_width() {
 
 # Función para solicitar la altura máxima
 ask_max_height() {
-    echo ""
-    read -p "$(echo -e ${BLUE}Introduce la altura máxima para redimensionar las imágenes [px]:${NC} )" max_height
-
     if [ -z "$max_height" ]; then
-        max_height=$max_width
-        success "Altura establecida igual a la anchura: ${max_height}px."
-    else
-        # Validar que es un número
-        if ! [[ "$max_height" =~ ^[0-9]+$ ]]; then
-            error "La altura debe ser un número entero positivo."
-        fi
+        if [ -n "$max_width" ] && [ $ASSUME_YES -eq 1 ]; then
+            max_height=$max_width
+            success "Altura establecida automáticamente igual a la anchura: ${max_height}px."
+        else
+            echo ""
+            read -p "$(echo -e ${BLUE}Introduce la altura máxima para redimensionar las imágenes [px]:${NC} )" max_height
 
-        if [ "$max_height" -lt 1 ]; then
-            error "La altura debe ser mayor que 0."
+            if [ -z "$max_height" ]; then
+                max_height=$max_width
+                success "Altura establecida igual a la anchura: ${max_height}px."
+            else
+                # Validar que es un número
+                if ! [[ "$max_height" =~ ^[0-9]+$ ]]; then
+                    error "La altura debe ser un número entero positivo."
+                fi
+
+                if [ "$max_height" -lt 1 ]; then
+                    error "La altura debe ser mayor que 0."
+                fi
+                
+                success "Altura establecida en ${max_height}px."
+            fi
         fi
-        
-        success "Altura establecida en ${max_height}px."
     fi
 }
 
@@ -322,7 +383,7 @@ ask_max_height() {
 ask_output_type() {
     echo ""
     echo -e "${BLUE}¿Qué formato de salida deseas?${NC}"
-    echo "  1) JPG (MozJPEG)"
+    echo "  1) JPG"
     echo "  2) WebP"
     echo "  3) AVIF"
     echo ""
@@ -330,20 +391,20 @@ ask_output_type() {
 
     case $output_option in
         1)
-            OUTPUT_FORMAT="--mozjpeg"
-            OUTPUT_QUALITY="{quality:${JPG_QUALITY}}"
+            OUTPUT_FORMAT="jpeg"
+            OUTPUT_QUALITY="$JPG_QUALITY"
             OUTPUT_EXT="jpg"
             OUTPUT_DIR="out-jpg"
             ;;
         2)
-            OUTPUT_FORMAT="--webp"
-            OUTPUT_QUALITY="{quality:${WEBP_QUALITY}}"
+            OUTPUT_FORMAT="webp"
+            OUTPUT_QUALITY="$WEBP_QUALITY"
             OUTPUT_EXT="webp"
             OUTPUT_DIR="out-webp"
             ;;
         3)
-            OUTPUT_FORMAT="--avif"
-            OUTPUT_QUALITY="{quality:${AVIF_QUALITY}}"
+            OUTPUT_FORMAT="avif"
+            OUTPUT_QUALITY="$AVIF_QUALITY"
             OUTPUT_EXT="avif"
             OUTPUT_DIR="out-avif"
             ;;
@@ -355,22 +416,41 @@ ask_output_type() {
     success "Formato de salida: $OUTPUT_EXT"
 }
 
-# Función para ejecutar el comando Docker
-execute_docker() {
-    echo ""
-    info "Configuración seleccionada:"
-    echo "  - Tipo de imagen entrada: $IMAGE_EXTENSION"
-    echo "  - Anchura máxima: ${max_width}px"
-    echo "  - Altura máxima: ${max_height}px"
-    echo "  - Formato de salida: $OUTPUT_EXT"
-    echo "  - Directorio de salida: $OUTPUT_DIR/"
-    if [ $ARTERO_MODE -eq 1 ]; then
-        echo "  - Modo ARTERO: rotar 90º antihorario solo imágenes apaisadas en '$OUTPUT_DIR/'"
+# Función para ejecutar el comando sharp-cli
+execute_cli() {
+    # Recoger lista completa de archivos antes de configurar directorios
+    local all_inputs=()
+    if [ "$IMAGE_EXTENSION" == "custom" ]; then
+        all_inputs=("${files[@]}")
+    else
+        shopt -s nullglob nocaseglob
+        case "$image_option" in
+            1) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG) ;;
+            2) all_inputs=(*.png *.PNG) ;;
+            3) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG *.png *.PNG) ;;
+        esac
+        shopt -u nullglob nocaseglob
     fi
-    echo ""
 
-    # Crear directorio de salida si no existe
-    mkdir -p "$OUTPUT_DIR"
+    if [ ${#all_inputs[@]} -eq 0 ]; then
+        error "No se encontraron archivos para procesar."
+    fi
+
+    # Si se pasaron archivos específicos y el primero es una ruta absoluta,
+    # ajustar OUTPUT_DIR para que se cree en la misma carpeta que las imágenes.
+    if [ $NO_FOLDER -eq 0 ]; then
+        if [ "$IMAGE_EXTENSION" == "custom" ] && [[ "${all_inputs[0]}" == /* ]]; then
+            local first_dir=$(dirname "${all_inputs[0]}")
+            OUTPUT_DIR="${first_dir}/${OUTPUT_DIR}"
+        fi
+        # Crear directorio de salida si no existe
+        mkdir -p "$OUTPUT_DIR"
+    fi
+
+    # Notificación de inicio (solo macOS)
+    if [ $QUIET -eq 1 ] && command -v osascript &>/dev/null; then
+        osascript -e "display notification \"Optimizando ${#all_inputs[@]} imágenes...\" with title \"Sharp Resizer\""
+    fi
 
     if [ $ASSUME_YES -eq 0 ]; then
         read -p "$(echo -e ${YELLOW}¿Deseas continuar con el proceso? [s/N]:${NC} )" confirm
@@ -382,31 +462,12 @@ execute_docker() {
         info "Confirmación automática (--yes)."
     fi
 
-    info "Iniciando el proceso de redimensionado..."
+    info "Iniciando el proceso de redimensionado con sharp-cli..."
     echo ""
 
-    # Variable para controlar el estado de ejecución
     has_errors=0
 
-    # Detectar la plataforma (para Mac con Apple Silicon)
-    PLATFORM_FLAGS=()
-    if [[ "$(uname -m)" == "arm64" ]]; then
-        info "Detectado Mac con Apple Silicon, usando emulación AMD64..."
-        PLATFORM_FLAGS=(--platform linux/amd64)
-    fi
-
-    # Tamaño del lote para procesar (evitar problemas de memoria)
-    BATCH_SIZE=${BATCH_SIZE:-10}
-
-    # Recoger lista completa de entrada y métricas de entrada
-    local all_inputs=()
-    shopt -s nullglob nocaseglob
-    case "$image_option" in
-        1) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG) ;;
-        2) all_inputs=(*.png *.PNG) ;;
-        3) all_inputs=(*.jpg *.jpeg *.JPG *.JPEG *.png *.PNG) ;;
-    esac
-    shopt -u nullglob nocaseglob
+    # (all_inputs ya está poblada al inicio de execute_cli)
 
     for f in "${all_inputs[@]}"; do
         lower_f=$(echo "$f" | tr '[:upper:]' '[:lower:]')
@@ -414,9 +475,6 @@ execute_docker() {
             *.png) COUNT_PNG=$((COUNT_PNG+1));;
             *.jpg|*.jpeg) COUNT_JPG=$((COUNT_JPG+1));;
         esac
-    done
-
-    for f in "${all_inputs[@]}"; do
         if [ -f "$f" ]; then
             local s
             s=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
@@ -424,185 +482,141 @@ execute_docker() {
         fi
     done
 
-    # Identificar Imagen
-    local SQUOOSH_IMAGE="willh/squoosh-cli:latest"
+    process_image() {
+        local input_file="$1"
+        local base=$(basename "$input_file")
+        local name="${base%.*}"
+        local out_file=""
 
-    # Helper para procesar archivos en lotes
-    process_files() {
-        # Guardamos IFS actual y lo restauramos al default para evitar problemas con arrays en Bash 3.2
-        local OLD_IFS="$IFS"
-        IFS=$' \t\n'
-        
-        local files_to_process=("$@")
-        if [ ${#files_to_process[@]} -eq 0 ]; then IFS="$OLD_IFS"; return; fi
+        if [ $NO_FOLDER -eq 1 ]; then
+            local file_dir=$(dirname "$input_file")
+            out_file="${file_dir}/${name}_resized.${OUTPUT_EXT}"
+        else
+            out_file="${OUTPUT_DIR}/${name}.${OUTPUT_EXT}"
+        fi
 
-        local total_files=${#files_to_process[@]}
-        info "Procesando $total_files archivo(s) en lotes de $BATCH_SIZE..."
+        if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out_file" ] && [ "$out_file" -nt "$input_file" ]; then
+            info "Saltando (más reciente): $out_file"
+            return 0
+        fi
 
-        for ((i=0; i<total_files; i+=BATCH_SIZE)); do
-            local batch=("${files_to_process[@]:i:BATCH_SIZE}")
-            local batch_num=$((i/BATCH_SIZE + 1))
-            local total_batches=$(((total_files + BATCH_SIZE - 1) / BATCH_SIZE))
+        local w=$(sips -g pixelWidth "$input_file" 2>/dev/null | awk '/pixelWidth:/ {print $2}')
+        local h=$(sips -g pixelHeight "$input_file" 2>/dev/null | awk '/pixelHeight:/ {print $2}')
 
-            info "  Lote $batch_num de $total_batches (${#batch[@]} archivos)..."
+        local resize_args=("resize")
+        if [[ -n "$max_width" && -n "$max_height" ]]; then
+            # Ambas dimensiones proporcionadas: Sharp ajustará para que quepa en el "cuadro"
+            resize_args+=("--width" "$max_width" "--height" "$max_height" "--fit" "inside")
+        elif [[ -n "$max_width" ]]; then
+            resize_args+=("--width" "$max_width")
+        elif [[ -n "$max_height" ]]; then
+            resize_args+=("--height" "$max_height")
+        fi
 
-            # Arrays para separar horizontales (resize width) y verticales (resize height)
-            local batch_width=()
-            local batch_height=()
-
-            for p in "${batch[@]}"; do
-                # 1. Comprobación skip-existing
-                local base=$(basename "$p")
-                local name="${base%.*}"
-                local out="${OUTPUT_DIR}/${name}.${OUTPUT_EXT}"
-                if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
-                    info "Saltando (más reciente): $out"
-                    continue
+        if [ $DRY_RUN -eq 1 ]; then
+            info "[dry-run] sharp -i \"$input_file\" -o \"$out_file\" --format $OUTPUT_FORMAT -q $OUTPUT_QUALITY ${resize_args[*]}"
+        else
+            local target_dir=$(dirname "$out_file")
+            if npx -y sharp-cli -i "$input_file" -o "$target_dir" --format "$OUTPUT_FORMAT" -q "$OUTPUT_QUALITY" "${resize_args[@]}" >/dev/null 2>&1; then
+                # Si estamos en modo no-folder, sharp-cli habrá creado <base>.<ext> en $target_dir.
+                # Necesitamos renombrarlo a <name>_resized.<ext>
+                if [ $NO_FOLDER -eq 1 ]; then
+                   local generated="${target_dir}/${name}.${OUTPUT_EXT}"
+                   if [ -f "$generated" ] && [ "$generated" != "$out_file" ]; then
+                       mv "$generated" "$out_file"
+                   fi
                 fi
-
-                # 2. Detectar orientación con sips
-                # Si falla sips, asumimos horizontal (width) por defecto
-                local w=$(sips -g pixelWidth "$p" 2>/dev/null | awk '/pixelWidth:/ {print $2}')
-                local h=$(sips -g pixelHeight "$p" 2>/dev/null | awk '/pixelHeight:/ {print $2}')
-
-                if [[ -n "$w" && -n "$h" && "$h" -gt "$w" ]]; then
-                    # Vertical: redimensionar restringiendo ALTURA
-                    batch_height+=("$p")
-                else
-                    # Horizontal o Cuadrada o fallo detección: redimensionar restringiendo ANCHURA
-                    batch_width+=("$p")
-                fi
-            done
-
-            local batch_has_errors=0
-
-            # Procesar Horizontales
-            if [ ${#batch_width[@]} -gt 0 ]; then
-                if [ $DRY_RUN -eq 1 ]; then
-                    info "[dry-run] Resize por WIDTH ($max_width px): ${#batch_width[@]} archs"
-                elif docker run --rm "${PLATFORM_FLAGS[@]}" -v "${PWD}":/data --workdir /data "$SQUOOSH_IMAGE" $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{width:${max_width}}" -d "$OUTPUT_DIR" "${batch_width[@]}"; then
-                    : # OK
-                else
-                    warning "  ✗ Fallo en sub-lote horizontal"
-                    batch_has_errors=1
-                fi
-            fi
-
-            # Procesar Verticales
-            if [ ${#batch_height[@]} -gt 0 ]; then
-                if [ $DRY_RUN -eq 1 ]; then
-                    info "[dry-run] Resize por HEIGHT ($max_height px): ${#batch_height[@]} archs"
-                elif docker run --rm "${PLATFORM_FLAGS[@]}" -v "${PWD}":/data --workdir /data "$SQUOOSH_IMAGE" $OUTPUT_FORMAT "$OUTPUT_QUALITY" --resize "{height:${max_height}}" -d "$OUTPUT_DIR" "${batch_height[@]}"; then
-                    : # OK
-                else
-                    warning "  ✗ Fallo en sub-lote vertical"
-                    batch_has_errors=1
-                fi
-            fi
-
-            if [ ${#batch_width[@]} -eq 0 ] && [ ${#batch_height[@]} -eq 0 ]; then
-                 success "  ✓ Lote sin cambios (skip-existing)"
-            elif [ $batch_has_errors -eq 0 ]; then
-                 success "  ✓ Lote $batch_num completado"
+                echo -e "  ${GREEN}✓${NC} $base -> $OUTPUT_EXT"
             else
-                 has_errors=1
+                echo -e "  ${RED}✗${NC} Fallo: $base"
+                has_errors=1
             fi
-        done
+        fi
     }
 
     if [ ${#all_inputs[@]} -gt 0 ]; then
-        process_files "${all_inputs[@]}"
+        for f in "${all_inputs[@]}"; do
+            process_image "$f"
+        done
     else
         error "No se encontraron archivos para procesar."
     fi
 
     echo ""
-    # Calcular bytes salida
-    if [ $DRY_RUN -eq 0 ]; then
-        OUTPUT_TOTAL_BYTES=0
-        if ls out/* >/dev/null 2>&1; then
-            for f in out/*; do
-                [ -f "$f" ] || continue
-                s=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
-                OUTPUT_TOTAL_BYTES=$((OUTPUT_TOTAL_BYTES + s))
-            done
-        fi
-    fi
-
     if [ $has_errors -eq 0 ]; then
-        # Si se pidió el modo ARTERO, rotar salidas antes del resumen
         if [ $ARTERO_MODE -eq 1 ]; then
-            local t0=$(perl -MTime::HiRes=time -e 'printf "%.0f", time()*1000' 2>/dev/null || date +%s000)
+            local t0=$(date +%s%3N 2>/dev/null || date +%s000)
             rotate_artero_outputs
-            local t1=$(perl -MTime::HiRes=time -e 'printf "%.0f", time()*1000' 2>/dev/null || date +%s000)
+            local t1=$(date +%s%3N 2>/dev/null || date +%s000)
             ROTATED_TIME_MS=$((t1 - t0))
         fi
-        success "¡Proceso completado con éxito!"
-        success "Las imágenes redimensionadas se encuentran en el directorio '$OUTPUT_DIR/'"
+        
+        success "¡Proceso completado!"
+        success "Imágenes en '$OUTPUT_DIR/'"
 
-        # Listar archivos generados
+        # Notificación de fin (solo macOS)
+        if [ $QUIET -eq 1 ] && command -v osascript &>/dev/null; then
+            osascript -e "display notification \"¡Proceso completado con éxito!\" with title \"Sharp Resizer\""
+        fi
+
         if [ -d "$OUTPUT_DIR" ]; then
             echo ""
-            info "Resumen de archivos generados:"
+            info "Resumen:"
             file_count=$(ls -1q "$OUTPUT_DIR"/ | wc -l | tr -d ' ')
-            total_size=$(du -sh "$OUTPUT_DIR"/ | cut -f1)
-            echo "  - Total de archivos: $file_count"
-            echo "  - Tamaño total: $total_size"
-            echo ""
-            info "Resumen detallado:"
-            echo "  - JPG procesados: $COUNT_JPG"
-            echo "  - PNG procesados: $COUNT_PNG"
-            if [ $DRY_RUN -eq 0 ]; then
-                in_mb=$(awk -v b=$INPUT_TOTAL_BYTES 'BEGIN{printf "%.2f", b/1048576}')
-                out_mb=$(awk 'BEGIN{print 0}')
-                if ls "$OUTPUT_DIR"/* >/dev/null 2>&1; then
-                    out_mb=$(du -sk "$OUTPUT_DIR"/ | awk '{printf "%.1f", $1/1024}')
+            
+            local current_out_bytes=0
+            shopt -s nullglob
+            for f in "$OUTPUT_DIR"/*; do
+                if [ -f "$f" ]; then
+                    s=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
+                    current_out_bytes=$((current_out_bytes + s))
                 fi
-                saved=$(awk -v a=$in_mb -v b=$out_mb 'BEGIN{d=a-b; if(d<0)d=0; printf "%.2f", d}')
-                echo "  - Tamaño entrada aprox: ${in_mb}MB"
-                echo "  - Tamaño salida aprox:  ${out_mb}MB"
-                echo "  - Ahorro aprox:         ${saved}MB"
-            fi
+            done
+            shopt -u nullglob
+
+            in_mb=$(awk -v b=$INPUT_TOTAL_BYTES 'BEGIN{printf "%.2f", b/1048576}')
+            out_mb=$(awk -v b=$current_out_bytes 'BEGIN{printf "%.2f", b/1048576}')
+            saved=$(awk -v a=$in_mb -v b=$out_mb 'BEGIN{d=a-b; if(d<0)d=0; printf "%.2f", d}')
+
+            echo "  - Total:           $file_count"
+            echo "  - Ahorro aprox:    ${saved} MB"
+            
             if [ $ARTERO_MODE -eq 1 ]; then
-                echo "  - Rotados (-artero):    $ROTATED_COUNT archivo(s) en ${ROTATED_TIME_MS}ms"
+                echo "  - Rotados (-artero): $ROTATED_COUNT"
             fi
         fi
     else
-        error "Hubo errores durante el proceso de redimensionado. Revisa los mensajes anteriores."
+        error "Hubo errores durante el proceso."
     fi
 }
 
-# Script principal
 main() {
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}  Redimensionador de Imágenes (Docker)${NC}"
+    echo -e "${GREEN}  Redimensionador Imágenes (CLI/Sharp)${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo ""
 
-    # 0. Parsear argumentos
     parse_args "$@"
-
-    # 1. Comprobar Docker
-    check_docker
-
-    # 2. Preguntar tipo de imagen
-    ask_image_type
-
-    # 3. Preguntar tipo de salida
-    ask_output_type
-
-    # 4. Preguntar anchura máxima
-    ask_max_width
+    check_dependencies
     
-    # 4b. Preguntar altura máxima
+    if [ ${#FILE_LIST[@]} -gt 0 ]; then
+        collect_files_from_args
+    else
+        ask_image_type
+    fi
+
+    if [ -z "$OUTPUT_EXT" ]; then
+        ask_output_type
+    fi
+
+    if [ -z "$max_width" ]; then
+        ask_max_width
+    fi
+
     ask_max_height
 
-    # 5. Corregir orientación EXIF
     fix_orientation
-
-    # 6. Ejecutar Docker
-    execute_docker
+    execute_cli
 }
 
-# Ejecutar el script principal
 main "$@"
