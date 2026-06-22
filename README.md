@@ -41,6 +41,9 @@ tools update
   - Ruby + Bundler (para WhatWeb)
   - Python 3 + pip (para domain_analyzer)
   - PHP + Composer (para PHP-Antimalware-Scanner)
+  - Go (para compilar wpprobe)
+  - Node.js + npm/npx (para Lighthouse y resize-images-cli)
+  - MySQL client tools (para scripts WordPress/MySQL)
 
 ## 📁 Estructura del Proyecto
 
@@ -51,25 +54,31 @@ Tools/
 ├── README.md
 │
 ├── scripts/                # Scripts personalizados
-│   ├── backup/
-│   │   ├── mysql_backup.sh
-│   │   └── mysqlBackup.sh
 │   ├── utilities/
 │   │   ├── nmap.sh
+│   │   ├── mysql_backup.sh
 │   │   ├── redimensionar_imagenes.sh
+│   │   ├── redimensionar_imagenes_cli.sh
 │   │   └── tips_bash.sh
 │   └── WordPress/
 │       ├── wp-create.sh           # Crear instalación WordPress
 │       ├── wp-delete.sh           # Eliminar instalación WordPress
 │       ├── wp-setup-env.sh        # Configurar entorno (carpeta + BD)
 │       ├── wp-plugin-create.sh    # Crear estructura de plugin
-│       ├── config.file
-│       ├── README.md
+│       ├── wp-db-backup.sh        # Backup de BD WordPress actual
+│       ├── wp-db-restore.sh       # Restore de BD WordPress actual
+│       ├── wp-lighthouse.sh       # Auditoría Lighthouse
+│       ├── wp-link-checker.sh     # Enlaces rotos
+│       ├── wp-mixed-content.sh    # Mixed content
+│       ├── common.sh              # Configuración y helpers compartidos
 │       └── TODO
 │
 └── [Submódulos]            # Herramientas de seguridad
+    ├── AiGPT-WordPress-Exploitation-Framework/
     ├── domain_analyzer/    # Análisis de dominios
     ├── PHP-Antimalware-Scanner/  # Escáner de malware PHP
+    ├── wpprobe/            # Scanner WordPress
+    ├── phpstan/
     └── WhatWeb/           # Identificación de tecnologías web
 ```
 
@@ -110,6 +119,9 @@ tools domain-analyzer -d example.com
 
 # Escanear malware PHP
 tools php-scanner /path/to/scan
+
+# Escanear plugins/vulnerabilidades WordPress
+tools wpprobe scan --url https://example.com
 ```
 
 ### 🌐 WordPress
@@ -133,6 +145,11 @@ tools wp-reset-admin [user_id]
 # Backup y Restauración de Base de Datos
 tools wp-db-backup [comentario]
 tools wp-db-restore
+
+# Auditoría web
+tools lighthouse https://example.com
+tools mixed-content https://example.com
+tools link-checker https://example.com
 ```
 
 ### 💾 Backup
@@ -171,7 +188,9 @@ python domain_analyzer.py -d example.com
 
 ```bash
 cd ~/Developer/Tools/PHP-Antimalware-Scanner
-php scan.php /path/to/scan
+./dist/scanner /path/to/scan
+# Alternativa si el binario no está disponible:
+./bin/run /path/to/scan
 ```
 
 ### WhatWeb
@@ -257,7 +276,7 @@ Para añadir nuevos scripts o herramientas:
 ## 📝 Notas
 
 - El script `update.sh` en la raíz está deprecated. Usa `tools update` en su lugar.
-- Los scripts de WordPress requieren configuración en `scripts/WordPress/config.file`
+- `scripts/WordPress/common.sh` es la fuente de configuración compartida para los scripts WordPress. Puedes sobrescribir credenciales con `WP_DB_USER`, `WP_DB_PASS`, `WP_DB_HOST` y `WP_DEFAULT_MODULES_DIR`.
 - Todos los scripts tienen permisos de ejecución y están documentados internamente
 
 ## 📄 Licencia

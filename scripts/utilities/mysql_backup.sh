@@ -13,16 +13,27 @@
 #==============================================================================
 
 # Credenciales MySQL
-MYSQL_USER="root"
-MYSQL_PASSWORD="root"
-MYSQL_HOST="localhost"
-MYSQL_PORT="3306"
+MYSQL_USER="${MYSQL_USER:-root}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:-root}"
+MYSQL_HOST="${MYSQL_HOST:-localhost}"
+MYSQL_PORT="${MYSQL_PORT:-3306}"
 
 # Rutas de binarios MySQL
-#MYSQL_BIN="/opt/homebrew/opt/mysql/bin/mysql"
-MYSQL_BIN="/opt/homebrew/opt/mysql@8.4/bin/mysql"
-#MYSQLDUMP_BIN="/opt/homebrew/opt/mysql/bin/mysqldump"
-MYSQLDUMP_BIN="/opt/homebrew/opt/mysql@8.4/bin/mysqldump"
+find_mysql_binary() {
+    local binary_name=$1
+    if command -v "$binary_name" >/dev/null 2>&1; then
+        command -v "$binary_name"
+    elif [ -x "/opt/homebrew/opt/mysql@8.4/bin/$binary_name" ]; then
+        echo "/opt/homebrew/opt/mysql@8.4/bin/$binary_name"
+    elif [ -x "/opt/homebrew/opt/mysql/bin/$binary_name" ]; then
+        echo "/opt/homebrew/opt/mysql/bin/$binary_name"
+    else
+        echo ""
+    fi
+}
+
+MYSQL_BIN="${MYSQL_BIN:-$(find_mysql_binary mysql)}"
+MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-$(find_mysql_binary mysqldump)}"
 
 # Directorio de backups (por defecto)
 BACKUP_DIR="./mysql_backups"

@@ -2,8 +2,14 @@
 
 set -euo pipefail
 
-SCRIPTPATH=$(dirname "$0")
-source $SCRIPTPATH/common.sh
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPTPATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+source "$SCRIPTPATH/common.sh"
 
 ###############################################
 

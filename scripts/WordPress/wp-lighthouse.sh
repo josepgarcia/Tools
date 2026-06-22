@@ -49,7 +49,7 @@ main() {
     check_node
 
     if [ $# -eq 0 ]; then
-        echo "Uso: tools wp-lighthouse <URL | archivo_con_urls>"
+        echo "Uso: tools lighthouse <URL | archivo_con_urls>"
         exit 1
     fi
 

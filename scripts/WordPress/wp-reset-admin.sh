@@ -6,7 +6,7 @@ set -euo pipefail
 # WordPress Reset Admin User
 #
 # Este script resetea el usuario administrador (ID=1)
-# con credenciales por defecto para acceso de emergencia
+# con credenciales generadas para acceso de emergencia
 #
 # Debe ejecutarse dentro de una carpeta con WordPress
 # (donde exista wp-config.php)
@@ -16,7 +16,13 @@ set -euo pipefail
 # Resets the password for the admin user (user_id 1 by default)
 # Usage: ./wp-reset-admin.sh [user_id]
 
-SCRIPTPATH=$(dirname "$0")
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPTPATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 # Source common logic
 source "$SCRIPTPATH/common.sh"
 
@@ -42,6 +48,15 @@ WORDFENCE_DIR="wp-content/plugins/wordfence"
 WORDFENCE_TMP="/tmp/wordfence_${PROJECT_NAME}"
 WORDFENCE_MOVED=false
 
+restore_wordfence() {
+  if [ "$WORDFENCE_MOVED" = true ] && [ -d "$WORDFENCE_TMP" ] && [ ! -e "$WORDFENCE_DIR" ]; then
+    mkdir -p "$(dirname "$WORDFENCE_DIR")"
+    mv "$WORDFENCE_TMP" "$WORDFENCE_DIR"
+    echo -e "${GREEN}Wordfence restaurado ✅${NC}"
+  fi
+}
+trap restore_wordfence EXIT
+
 if [ -d "$WORDFENCE_DIR" ]; then
   echo -e "${YELLOW}Wordfence detectado, moviendo temporalmente...${NC}"
   if [ -e "$WORDFENCE_TMP" ]; then
@@ -64,11 +79,15 @@ fi
 
 # Defaults
 DEFAULT_LOGIN="admin"
-DEFAULT_PASS="123123"
+DEFAULT_PASS="${WP_RESET_ADMIN_PASSWORD:-$(openssl rand -base64 18 | tr -d '/+=' | cut -c 1-16)}"
 DEFAULT_EMAIL="admin@admin.com"
 
 # 2. Get User ID (Default: 1)
 USER_ID=${1:-1}
+if [[ ! "$USER_ID" =~ ^[0-9]+$ ]]; then
+  echo -e "${RED}ERROR: User ID must be numeric.${NC}"
+  exit 1
+fi
 
 echo -e "${GREEN}Configuración leída correctamente ✅${NC}"
 echo ""
@@ -79,12 +98,11 @@ echo -e "  TABLE_PREFIX: ${YELLOW}$TABLE_PREFIX${NC}"
 echo -e "  Usuario ID:   ${YELLOW}$USER_ID${NC}"
 echo ""
 
-MYSQL_OPTS=$(get_mysql_opts)
-MYSQL_CMD="$mysqlbin $MYSQL_OPTS"
+DBNAME_SQL=$(quote_identifier "$DBNAME")
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf 'Checking MySQL connection...\n'
-if ! $MYSQL_CMD -e "SELECT 1;" &>/dev/null; then
+if ! "$mysqlbin" "${MYSQL_OPTS[@]}" -e "SELECT 1;" &>/dev/null; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo"
@@ -95,23 +113,24 @@ echo -e "${GREEN}MySQL connection OK ✅${NC}"
 
 # Verificar si la base de datos existe
 printf '\nChecking if database exists...\n'
-if ! $MYSQL_CMD -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep -q "$DBNAME"; then
+if ! "$mysqlbin" "${MYSQL_OPTS[@]}" -N -B -e "SHOW DATABASES LIKE '$DBNAME';" 2>/dev/null | grep -Fxq "$DBNAME"; then
   echo -e "${RED}ERROR: La base de datos '$DBNAME' no existe ❌${NC}"
   exit 1
 fi
 echo -e "${GREEN}Database found ✅${NC}"
 
 USERS_TABLE="${TABLE_PREFIX}users"
+USERS_TABLE_SQL=$(quote_identifier "$USERS_TABLE")
 
 # Verificar si el usuario existe
 printf '\nChecking if user ID=%s exists...\n' "$USER_ID"
-USER_EXISTS=$($MYSQL_CMD -N -e "SELECT ID FROM $DBNAME.$USERS_TABLE WHERE ID=$USER_ID;" 2>/dev/null || true)
+USER_EXISTS=$("$mysqlbin" "${MYSQL_OPTS[@]}" -N -e "SELECT ID FROM $DBNAME_SQL.$USERS_TABLE_SQL WHERE ID=$USER_ID;" 2>/dev/null || true)
 
 if [ -z "$USER_EXISTS" ]; then
   echo -e "${RED}ERROR: El usuario con ID=$USER_ID no existe ❌${NC}"
   echo ""
   echo "Usuarios disponibles:"
-  $MYSQL_CMD -e "SELECT ID, user_login, user_email FROM $DBNAME.$USERS_TABLE;" 2>/dev/null
+  "$mysqlbin" "${MYSQL_OPTS[@]}" -e "SELECT ID, user_login, user_email FROM $DBNAME_SQL.$USERS_TABLE_SQL;" 2>/dev/null
   exit 1
 fi
 echo -e "${GREEN}User found ✅${NC}"
@@ -119,7 +138,7 @@ echo -e "${GREEN}User found ✅${NC}"
 # Mostrar datos actuales del usuario
 printf '\nDatos actuales del usuario:\n'
 echo -e "${YELLOW}"
-$MYSQL_CMD -e "SELECT ID, user_login, user_email, user_nicename FROM $DBNAME.$USERS_TABLE WHERE ID=$USER_ID;" 2>/dev/null
+"$mysqlbin" "${MYSQL_OPTS[@]}" -e "SELECT ID, user_login, user_email, user_nicename FROM $DBNAME_SQL.$USERS_TABLE_SQL WHERE ID=$USER_ID;" 2>/dev/null
 echo -e "${NC}"
 
 # Confirmar antes de proceder
@@ -127,7 +146,7 @@ echo -e "${RED}¡ATENCIÓN! Esta acción modificará el usuario.${NC}"
 echo ""
 echo "Nuevos datos:"
 echo -e "  user_login:    ${GREEN}$DEFAULT_LOGIN${NC}"
-echo -e "  user_pass:     ${GREEN}$DEFAULT_PASS${NC} (MD5)"
+echo -e "  user_pass:     ${GREEN}$DEFAULT_PASS${NC}"
 echo -e "  user_nicename: ${GREEN}$DEFAULT_LOGIN${NC}"
 echo -e "  user_email:    ${GREEN}$DEFAULT_EMAIL${NC}"
 echo ""
@@ -140,8 +159,8 @@ fi
 
 # Ejecutar el UPDATE
 printf '\nUpdating user...\n'
-if ! $MYSQL_CMD -e "
-UPDATE $DBNAME.$USERS_TABLE
+if ! "$mysqlbin" "${MYSQL_OPTS[@]}" -e "
+UPDATE $DBNAME_SQL.$USERS_TABLE_SQL
 SET
   user_login = '$DEFAULT_LOGIN',
   user_pass = MD5('$DEFAULT_PASS'),
@@ -157,7 +176,7 @@ echo -e "${GREEN}User updated ✅${NC}"
 # Mostrar los nuevos datos
 printf '\nNuevos datos del usuario:\n'
 echo -e "${GREEN}"
-$MYSQL_CMD -e "SELECT ID, user_login, user_email, user_nicename FROM $DBNAME.$USERS_TABLE WHERE ID=$USER_ID;" 2>/dev/null
+"$mysqlbin" "${MYSQL_OPTS[@]}" -e "SELECT ID, user_login, user_email, user_nicename FROM $DBNAME_SQL.$USERS_TABLE_SQL WHERE ID=$USER_ID;" 2>/dev/null
 echo -e "${NC}"
 
 echo ""

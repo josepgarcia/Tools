@@ -57,7 +57,7 @@ main() {
     check_wget
 
     if [ $# -eq 0 ]; then
-        echo "Uso: tools wp-link-checker <URL>"
+        echo "Uso: tools link-checker <URL>"
         exit 1
     fi
 

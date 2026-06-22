@@ -2,8 +2,14 @@
 
 set -euo pipefail
 
-SCRIPTPATH=$(dirname "$0")
-source $SCRIPTPATH/common.sh
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPTPATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+source "$SCRIPTPATH/common.sh"
 
 ###############################################
 
@@ -11,6 +17,7 @@ if ! [[ $# -eq 1 ]]; then
   echo 'Necesario 1 parámetro, nombre del proyecto'
   exit 1
 fi
+validate_project_name "$1"
 
 
 clear
@@ -40,20 +47,21 @@ if check_database_exists "$DBNAME"; then
 fi
 
 printf '\nCreating database...\n'
-if ! $mysqlbin -u $DBUSER -p$DBPASS -e "CREATE DATABASE $DBNAME CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null; then
+DBNAME_SQL=$(quote_identifier "$DBNAME")
+if ! "$mysqlbin" "${MYSQL_OPTS[@]}" -e "CREATE DATABASE $DBNAME_SQL CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null; then
   echo -e "${RED}ERROR: No se pudo crear la base de datos ❌${NC}"
   exit 1
 fi
 echo -e "${GREEN}Database created ✅${NC}"
 
 # Verificar si la carpeta ya existe
-if [[ -d $DIRNAME ]]; then
+if [[ -d "$DIRNAME" ]]; then
   echo -e "${RED}ERROR: La carpeta '$DIRNAME' ya existe ❌${NC}"
   exit 1
 fi
 
 printf '\nCreating folder...\n'
-if ! mkdir $DIRNAME; then
+if ! mkdir "$DIRNAME"; then
   echo -e "${RED}ERROR: No se pudo crear la carpeta ❌${NC}"
   exit 1
 fi
@@ -63,5 +71,4 @@ printf '\n'
 echo -e "${GREEN}Environment setup completed 🙌${NC}"
 printf '\n'
 
-cd $DIRNAME
-
+cd "$DIRNAME"

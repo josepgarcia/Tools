@@ -46,7 +46,7 @@ main() {
     echo ""
 
     if [ $# -eq 0 ]; then
-        echo "Uso: tools wp-mixed-content <URL>"
+        echo "Uso: tools mixed-content <URL>"
         exit 1
     fi
 

@@ -6,7 +6,13 @@ set -euo pipefail
 # Creates a backup of the current WordPress database
 # Naming convention: backup_FOLDER_X_COMMENT_TIMESTAMP.sql.gz
 
-SCRIPTPATH=$(dirname "$0")
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPTPATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 # Source common logic
 source "$SCRIPTPATH/common.sh"
 
@@ -24,7 +30,7 @@ fi
 
 # 1. Read Credentials
 get_db_credentials_from_config
-MYSQL_OPTS=$(get_mysql_opts)
+require_mysqldump
 
 # 2. Folder Name
 FOLDER_NAME=$(basename "$(pwd)")
@@ -62,7 +68,7 @@ NEXT_X=$((MAX_X + 1))
 
 # 4. Input Comment
 COMMENT=""
-if [ -n "$1" ]; then
+if [ -n "${1:-}" ]; then
     COMMENT="_$1"
 else
     # If not passed as argument, logic in tools script might have prompted, or we prompt here if empty
@@ -82,7 +88,7 @@ FILENAME="backup_${FOLDER_NAME}_${NEXT_X}${COMMENT}_${TIMESTAMP}.sql.gz"
 # 7. Execute Dump
 echo -e "Backing up database ${YELLOW}$DBNAME${NC} to ${YELLOW}$FILENAME${NC}..."
 
-if $mysqldumpbin $MYSQL_OPTS --add-drop-table "$DBNAME" | gzip > "$FILENAME"; then
+if "$mysqldumpbin" "${MYSQL_OPTS[@]}" --add-drop-table "$DBNAME" | gzip > "$FILENAME"; then
     echo -e "${GREEN}Backup created successfully! ✅${NC}"
     echo ""
     echo -e "${BLUE}Available Backups:${NC}"

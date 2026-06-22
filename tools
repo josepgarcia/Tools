@@ -48,6 +48,8 @@ show_help() {
     echo -e "  ${GREEN}wp-setup-env${NC}         Configurar entorno (carpeta + BD)"
     echo -e "  ${GREEN}wp-plugin-create${NC}     Crear estructura de nuevo plugin"
     echo -e "  ${GREEN}wp-reset-admin${NC}       Resetear usuario admin (ejecutar en carpeta WP)"
+    echo -e "  ${GREEN}wp-db-backup${NC}         Respaldar BD WordPress actual"
+    echo -e "  ${GREEN}wp-db-restore${NC}        Restaurar BD WordPress actual"
     echo -e "  ${GREEN}wp-optimize${NC}          Optimizar base de datos WordPress"
     echo ""
     echo -e "${BLUE}Comandos Web / Auditoría:${NC}"
@@ -122,7 +124,7 @@ update_tools() {
     if [ -f "$TOOLS_DIR/PHP-Antimalware-Scanner/composer.json" ]; then
         echo "🐘 Actualizando PHP-Antimalware-Scanner (Composer)..."
         cd "$TOOLS_DIR/PHP-Antimalware-Scanner"
-        composer update 2>/dev/null || echo "⚠️  Composer no instalado, saltando..."
+        composer install 2>/dev/null || echo "⚠️  Composer no instalado o instalación fallida, saltando..."
         cd "$TOOLS_DIR"
         echo ""
     fi
@@ -290,7 +292,7 @@ show_menu() {
     esac
 }
 
-if [ -z "$1" ]; then
+if [ "$#" -eq 0 ]; then
     show_menu
     exit 0
 fi
@@ -320,7 +322,15 @@ case "$1" in
     php-scanner)
         shift
         cd "$TOOLS_DIR/PHP-Antimalware-Scanner"
-        php scan.php "$@"
+        if [ -x "./dist/scanner" ]; then
+            ./dist/scanner "$@"
+        elif [ -x "./bin/run" ]; then
+            ./bin/run "$@"
+        else
+            echo -e "${RED}ERROR: PHP-Antimalware-Scanner executable not found.${NC}"
+            echo "Run 'tools update' to install/build dependencies."
+            exit 1
+        fi
         ;;
     wpprobe)
         shift

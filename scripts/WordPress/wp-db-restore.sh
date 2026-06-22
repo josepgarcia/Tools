@@ -5,7 +5,13 @@ set -euo pipefail
 # wp-db-restore.sh
 # Restores a WordPress database from a selected SQL file in the current directory.
 
-SCRIPTPATH=$(dirname "$0")
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPTPATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 # Source common logic
 source "$SCRIPTPATH/common.sh"
 
@@ -23,7 +29,7 @@ fi
 
 # 1. Read Credentials
 get_db_credentials_from_config
-MYSQL_OPTS=$(get_mysql_opts)
+require_mysql
 
 # 2. List SQL files
 echo "Searching for .sql and .sql.gz files..."
@@ -84,12 +90,12 @@ echo -e "Restoring ${YELLOW}$SELECTED_FILE${NC} into ${YELLOW}$DBNAME${NC}..."
 RESTORE_SUCCESS=0
 if [[ "$SELECTED_FILE" == *.gz ]]; then
     # Compressed file
-    if gunzip -c "$SELECTED_FILE" | $mysqlbin $MYSQL_OPTS "$DBNAME"; then
+    if gunzip -c "$SELECTED_FILE" | "$mysqlbin" "${MYSQL_OPTS[@]}" "$DBNAME"; then
         RESTORE_SUCCESS=1
     fi
 else
     # Regular text file
-    if $mysqlbin $MYSQL_OPTS "$DBNAME" < "$SELECTED_FILE"; then
+    if "$mysqlbin" "${MYSQL_OPTS[@]}" "$DBNAME" < "$SELECTED_FILE"; then
         RESTORE_SUCCESS=1
     fi
 fi

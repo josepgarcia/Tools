@@ -9,19 +9,22 @@ set -euo pipefail
 # VARIABLES
 ###############################################
 
-# Variables that depend on $1 (Project Name) if passed
-# Used by wp-create, wp-delete, etc.
-if [ -n "$1" ]; then
-  DIRNAME="wp$1"
-  DBNAME="wp_$1"
+# Variables that depend on $1 (Project Name) if passed.
+# Used by wp-create, wp-delete, etc. Keep this safe for scripts that source
+# common.sh without positional arguments.
+PROJECT_NAME="${1:-}"
+if [ -n "$PROJECT_NAME" ]; then
+  DIRNAME="wp$PROJECT_NAME"
+  DBNAME="wp_$PROJECT_NAME"
 else
   DIRNAME=""
   DBNAME=""
 fi
 
 # Default Credentials (can be overridden if needed)
-DBUSER="root"
-DBPASS="root"
+DBUSER="${WP_DB_USER:-root}"
+DBPASS="${WP_DB_PASS:-root}"
+DBHOST="${WP_DB_HOST:-localhost}"
 
 ###############################################
 # COLORS
@@ -50,36 +53,57 @@ find_binary() {
 mysqlbin=$(find_binary "mysql")
 mysqldumpbin=$(find_binary "mysqldump")
 
-# Validation
-if [ -z "$mysqlbin" ]; then
-    echo -e "${RED}ERROR: 'mysql' binary not found.${NC}"
-    echo "Please install MySQL (e.g., 'brew install mysql') or ensure it is in your PATH."
-    exit 1
-fi
-if [ -z "$mysqldumpbin" ]; then
-    # Warning only, as some scripts might not need mysqldump
-    :
-fi
-
 ###############################################
 # FUNCTIONS
 ###############################################
 
+require_mysql() {
+  if [ -z "$mysqlbin" ]; then
+    echo -e "${RED}ERROR: 'mysql' binary not found.${NC}"
+    echo "Please install MySQL (e.g., 'brew install mysql') or ensure it is in your PATH."
+    exit 1
+  fi
+}
+
+require_mysqldump() {
+  if [ -z "$mysqldumpbin" ]; then
+    echo -e "${RED}ERROR: 'mysqldump' binary not found.${NC}"
+    echo "Please install MySQL client tools or ensure mysqldump is in your PATH."
+    exit 1
+  fi
+}
+
 # Function to validate MySQL connection
 check_mysql_connection() {
-  $mysqlbin -u $DBUSER -p$DBPASS -e "SELECT 1;" &>/dev/null
+  require_mysql
+  "$mysqlbin" "${MYSQL_OPTS[@]}" -e "SELECT 1;" &>/dev/null
   return $?
 }
 
 # Function to check if a database exists
 check_database_exists() {
+  require_mysql
   local db_name=$1
-  local exists=$($mysqlbin -u $DBUSER -p$DBPASS -e "SHOW DATABASES LIKE '$db_name';" 2>/dev/null | grep "$db_name")
-  if [ ! -z "$exists" ]; then
+  local exists
+  exists=$("$mysqlbin" "${MYSQL_OPTS[@]}" -N -B -e "SHOW DATABASES LIKE '$db_name';" 2>/dev/null | grep -Fx "$db_name" || true)
+  if [ -n "$exists" ]; then
     return 0  # exists
   else
     return 1  # does not exist
   fi
+}
+
+validate_project_name() {
+  local project_name=$1
+  if [[ ! "$project_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo -e "${RED}ERROR: Project name may only contain letters, numbers, underscores, and hyphens.${NC}"
+    exit 1
+  fi
+}
+
+quote_identifier() {
+  local identifier=$1
+  printf '`%s`' "${identifier//\`/\`\`}"
 }
 
 # Function to extract a define value from wp-config.php
@@ -112,14 +136,16 @@ get_db_credentials_from_config() {
       echo -e "${RED}Error reading DB credentials form wp-config.php.${NC}"
       exit 1
   fi
+
+  set_mysql_opts
 }
 
-# Get MySQL options based on host
-get_mysql_opts() {
-   local host=${DBHOST:-localhost}
-   if [ "$host" != "localhost" ] && [ -n "$host" ]; then
-      echo "-h $host -u $DBUSER -p$DBPASS"
-   else
-      echo "-u $DBUSER -p$DBPASS"
-   fi
+set_mysql_opts() {
+  MYSQL_OPTS=(-u "$DBUSER" "-p$DBPASS")
+  local host=${DBHOST:-localhost}
+  if [ "$host" != "localhost" ] && [ -n "$host" ]; then
+    MYSQL_OPTS=(-h "$host" "${MYSQL_OPTS[@]}")
+  fi
 }
+
+set_mysql_opts
