@@ -78,7 +78,6 @@ Tools/
     ├── domain_analyzer/    # Análisis de dominios
     ├── PHP-Antimalware-Scanner/  # Escáner de malware PHP
     ├── wpprobe/            # Scanner WordPress
-    ├── phpstan/
     └── WhatWeb/           # Identificación de tecnologías web
 ```
 

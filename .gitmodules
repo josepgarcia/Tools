@@ -7,9 +7,6 @@
 [submodule "domain_analyzer"]
 	path = domain_analyzer
 	url = git@github.com:eldraco/domain_analyzer.git
-[submodule "phpstan"]
-	path = phpstan
-	url = git@github.com:phpstan/phpstan.git
 [submodule "wpprobe"]
 	path = wpprobe
 	url = git@github.com:Chocapikk/wpprobe.git
