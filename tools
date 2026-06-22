@@ -39,6 +39,8 @@ show_help() {
     echo -e "  ${GREEN}whatweb${NC}              Identificar tecnologías web"
     echo -e "  ${GREEN}domain-analyzer${NC}      Analizar dominios"
     echo -e "  ${GREEN}php-scanner${NC}          Escanear malware PHP"
+    echo -e "  ${GREEN}wpprobe${NC}              Escanear plugins y vulns WordPress"
+    echo -e "  ${GREEN}aigpt-wef${NC}            WordPress Exploitation Framework"
     echo ""
     echo -e "${BLUE}Comandos de WordPress:${NC}"
     echo -e "  ${GREEN}wp-create${NC}            Crear nueva instalación de WordPress"
@@ -83,8 +85,28 @@ update_tools() {
     if [ -f "$TOOLS_DIR/WhatWeb/Gemfile" ]; then
         echo "💎 Actualizando WhatWeb (Ruby gems)..."
         cd "$TOOLS_DIR/WhatWeb"
+        export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
         bundle install 2>/dev/null || echo "⚠️  Bundle no instalado, saltando..."
         cd "$TOOLS_DIR"
+        echo ""
+    fi
+
+    # Actualizar WPProbe (Go binary)
+    if [ -f "$TOOLS_DIR/wpprobe/go.mod" ]; then
+        echo "🔍 Actualizando WPProbe (Go)..."
+        cd "$TOOLS_DIR/wpprobe"
+        export PATH="/opt/homebrew/bin:$PATH"
+        git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+        go build -o wpprobe .
+        ./wpprobe update-db 2>/dev/null || true
+        cd "$TOOLS_DIR"
+        echo ""
+    fi
+
+    # Actualizar AiGPT-WEF (dependencias Python)
+    if [ -f "$TOOLS_DIR/AiGPT-WordPress-Exploitation-Framework/aigptWEF.py" ]; then
+        echo "🧠 Actualizando AiGPT-WEF (Python deps)..."
+        pip3 install requests --quiet 2>/dev/null || true
         echo ""
     fi
 
@@ -138,6 +160,8 @@ show_menu() {
     echo -e "  ${GREEN}15)${NC} Nmap Scan"
     echo -e "  ${GREEN}16)${NC} Resize Images"
     echo -e "  ${GREEN}17)${NC} Resize Images CLI"
+    echo -e "  ${GREEN}18)${NC} WPProbe Scan"
+    echo -e "  ${GREEN}19)${NC} AiGPT WEF"
     echo -e "  ${RED}q)${NC} Quit"
     echo ""
     read -p "Select an option: " choice
@@ -244,6 +268,18 @@ show_menu() {
         17)
             "$0" resize-images-cli
             ;;
+        18)
+            read -p "Target URL: " target
+            if [ -n "$target" ]; then
+                "$0" wpprobe scan --url "$target"
+            fi
+            ;;
+        19)
+            read -p "Targets file: " targets_file
+            if [ -n "$targets_file" ]; then
+                "$0" aigpt-wef --targets "$targets_file"
+            fi
+            ;;
         q|Q)
             echo "Bye!"
             exit 0
@@ -279,12 +315,27 @@ case "$1" in
     domain-analyzer)
         shift
         cd "$TOOLS_DIR/domain_analyzer"
-        python domain_analyzer.py "$@"
+        python3 domain_analyzer.py "$@"
         ;;
     php-scanner)
         shift
         cd "$TOOLS_DIR/PHP-Antimalware-Scanner"
         php scan.php "$@"
+        ;;
+    wpprobe)
+        shift
+        cd "$TOOLS_DIR/wpprobe"
+        if [ ! -f ./wpprobe ]; then
+            echo -e "${YELLOW}Building wpprobe...${NC}"
+            export PATH="/opt/homebrew/bin:$PATH"
+            go build -o wpprobe .
+        fi
+        ./wpprobe "$@"
+        ;;
+    aigpt-wef)
+        shift
+        cd "$TOOLS_DIR/AiGPT-WordPress-Exploitation-Framework"
+        python3 aigptWEF.py "$@"
         ;;
 
     # WordPress

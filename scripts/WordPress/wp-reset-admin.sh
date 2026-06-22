@@ -36,6 +36,22 @@ if [ ! -f "wp-config.php" ]; then
 fi
 echo -e "${GREEN}wp-config.php encontrado ✅${NC}"
 
+# Detectar y mover Wordfence plugin para evitar bloqueos
+PROJECT_NAME=$(basename "$(pwd)")
+WORDFENCE_DIR="wp-content/plugins/wordfence"
+WORDFENCE_TMP="/tmp/wordfence_${PROJECT_NAME}"
+WORDFENCE_MOVED=false
+
+if [ -d "$WORDFENCE_DIR" ]; then
+  echo -e "${YELLOW}Wordfence detectado, moviendo temporalmente...${NC}"
+  if [ -e "$WORDFENCE_TMP" ]; then
+    rm -rf "$WORDFENCE_TMP"
+  fi
+  mv "$WORDFENCE_DIR" "$WORDFENCE_TMP"
+  WORDFENCE_MOVED=true
+  echo -e "${GREEN}Wordfence movido a $WORDFENCE_TMP ✅${NC}"
+fi
+
 # Extraer datos de conexión desde wp-config.php
 printf '\nLeyendo configuración de wp-config.php...\n'
 get_db_credentials_from_config
@@ -68,7 +84,7 @@ MYSQL_CMD="$mysqlbin $MYSQL_OPTS"
 
 # Validar que MySQL esté corriendo y se pueda conectar
 printf 'Checking MySQL connection...\n'
-if ! $MYSQL_CMD -e '\q' &>/dev/null; then
+if ! $MYSQL_CMD -e "SELECT 1;" &>/dev/null; then
   echo -e "${RED}ERROR: No se puede conectar a MySQL ❌${NC}"
   echo "Verifica que:"
   echo "  - MySQL esté corriendo"

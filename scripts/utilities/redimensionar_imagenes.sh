@@ -20,6 +20,8 @@ ASSUME_YES=0
 QUIET=0
 DRY_RUN=0
 SKIP_EXISTING=0
+RESIZE_IMAGES=1
+RESIZE_MODE_FROM_ARGS=0
 
 # Calidades configurables desde el script
 JPG_QUALITY=80
@@ -53,6 +55,7 @@ Opciones:
   --quiet             Salida mínima (mantiene registro en out/process.log)
   --dry-run           No ejecuta, solo muestra acciones planificadas
   --skip-existing     Omite si el archivo de salida es más nuevo que el de entrada
+  --no-resize         Convierte formato/calidad sin cambiar dimensiones
   --jpg-quality=NN    Calidad JPEG (0-100), defecto ${JPG_QUALITY}
   --webp-quality=NN   Calidad WebP (0-100), defecto ${WEBP_QUALITY}
   --avif-quality=NN   Calidad AVIF (0-100), defecto ${AVIF_QUALITY}
@@ -69,6 +72,7 @@ parse_args() {
             --quiet) QUIET=1 ;;
             --dry-run) DRY_RUN=1 ;;
             --skip-existing) SKIP_EXISTING=1 ;;
+            --no-resize) RESIZE_IMAGES=0; RESIZE_MODE_FROM_ARGS=1 ;;
             --jpg-quality=*) JPG_QUALITY="${arg#*=}" ;;
             --webp-quality=*) WEBP_QUALITY="${arg#*=}" ;;
             --avif-quality=*) AVIF_QUALITY="${arg#*=}" ;;
@@ -236,7 +240,7 @@ rotate_artero_outputs() {
 # Función para solicitar el tipo de imagen
 ask_image_type() {
     echo ""
-    echo -e "${BLUE}¿Qué tipo de imagen deseas redimensionar?${NC}"
+    echo -e "${BLUE}¿Qué tipo de imagen deseas procesar?${NC}"
     echo "  1) JPG/JPEG"
     echo "  2) PNG"
     echo "  3) Ambos (JPG y PNG)"
@@ -277,6 +281,20 @@ ask_image_type() {
     fi
 
     success "Se encontraron ${#files[@]} archivo(s) para procesar."
+}
+
+# Función para preguntar si se debe cambiar el tamaño
+ask_resize_images() {
+    echo ""
+    read -p "$(echo -e ${BLUE}¿Quieres cambiar el tamaño de las imágenes? [s/N]:${NC} )" resize_confirm
+
+    if [[ "$resize_confirm" =~ ^[sS]$ ]]; then
+        RESIZE_IMAGES=1
+        success "Se cambiará el tamaño de las imágenes."
+    else
+        RESIZE_IMAGES=0
+        success "Solo se convertirá el formato; se conservarán las dimensiones originales."
+    fi
 }
 
 # Función para solicitar la anchura máxima
@@ -360,8 +378,13 @@ execute_docker() {
     echo ""
     info "Configuración seleccionada:"
     echo "  - Tipo de imagen entrada: $IMAGE_EXTENSION"
-    echo "  - Anchura máxima: ${max_width}px"
-    echo "  - Altura máxima: ${max_height}px"
+    if [ $RESIZE_IMAGES -eq 1 ]; then
+        echo "  - Cambiar tamaño: sí"
+        echo "  - Anchura máxima: ${max_width}px"
+        echo "  - Altura máxima: ${max_height}px"
+    else
+        echo "  - Cambiar tamaño: no"
+    fi
     echo "  - Formato de salida: $OUTPUT_EXT"
     echo "  - Directorio de salida: $OUTPUT_DIR/"
     if [ $ARTERO_MODE -eq 1 ]; then
@@ -382,7 +405,11 @@ execute_docker() {
         info "Confirmación automática (--yes)."
     fi
 
-    info "Iniciando el proceso de redimensionado..."
+    if [ $RESIZE_IMAGES -eq 1 ]; then
+        info "Iniciando el proceso de redimensionado..."
+    else
+        info "Iniciando el proceso de conversión..."
+    fi
     echo ""
 
     # Variable para controlar el estado de ejecución
@@ -449,6 +476,7 @@ execute_docker() {
             # Arrays para separar horizontales (resize width) y verticales (resize height)
             local batch_width=()
             local batch_height=()
+            local batch_convert=()
 
             for p in "${batch[@]}"; do
                 # 1. Comprobación skip-existing
@@ -457,6 +485,11 @@ execute_docker() {
                 local out="${OUTPUT_DIR}/${name}.${OUTPUT_EXT}"
                 if [ $SKIP_EXISTING -eq 1 ] && [ -f "$out" ] && [ "$out" -nt "$p" ]; then
                     info "Saltando (más reciente): $out"
+                    continue
+                fi
+
+                if [ $RESIZE_IMAGES -eq 0 ]; then
+                    batch_convert+=("$p")
                     continue
                 fi
 
@@ -475,6 +508,18 @@ execute_docker() {
             done
 
             local batch_has_errors=0
+
+            # Procesar sin redimensionar
+            if [ ${#batch_convert[@]} -gt 0 ]; then
+                if [ $DRY_RUN -eq 1 ]; then
+                    info "[dry-run] Convertir sin cambiar tamaño: ${#batch_convert[@]} archs"
+                elif docker run --rm "${PLATFORM_FLAGS[@]}" -v "${PWD}":/data --workdir /data "$SQUOOSH_IMAGE" $OUTPUT_FORMAT "$OUTPUT_QUALITY" -d "$OUTPUT_DIR" "${batch_convert[@]}"; then
+                    : # OK
+                else
+                    warning "  ✗ Fallo en sub-lote de conversión"
+                    batch_has_errors=1
+                fi
+            fi
 
             # Procesar Horizontales
             if [ ${#batch_width[@]} -gt 0 ]; then
@@ -500,7 +545,7 @@ execute_docker() {
                 fi
             fi
 
-            if [ ${#batch_width[@]} -eq 0 ] && [ ${#batch_height[@]} -eq 0 ]; then
+            if [ ${#batch_convert[@]} -eq 0 ] && [ ${#batch_width[@]} -eq 0 ] && [ ${#batch_height[@]} -eq 0 ]; then
                  success "  ✓ Lote sin cambios (skip-existing)"
             elif [ $batch_has_errors -eq 0 ]; then
                  success "  ✓ Lote $batch_num completado"
@@ -538,7 +583,11 @@ execute_docker() {
             ROTATED_TIME_MS=$((t1 - t0))
         fi
         success "¡Proceso completado con éxito!"
-        success "Las imágenes redimensionadas se encuentran en el directorio '$OUTPUT_DIR/'"
+        if [ $RESIZE_IMAGES -eq 1 ]; then
+            success "Las imágenes redimensionadas se encuentran en el directorio '$OUTPUT_DIR/'"
+        else
+            success "Las imágenes convertidas se encuentran en el directorio '$OUTPUT_DIR/'"
+        fi
 
         # Listar archivos generados
         if [ -d "$OUTPUT_DIR" ]; then
@@ -591,11 +640,16 @@ main() {
     # 3. Preguntar tipo de salida
     ask_output_type
 
-    # 4. Preguntar anchura máxima
-    ask_max_width
-    
-    # 4b. Preguntar altura máxima
-    ask_max_height
+    # 4. Preguntar si se debe redimensionar
+    if [ $RESIZE_MODE_FROM_ARGS -eq 0 ]; then
+        ask_resize_images
+    fi
+
+    # 4b. Preguntar dimensiones solo si se debe redimensionar
+    if [ $RESIZE_IMAGES -eq 1 ]; then
+        ask_max_width
+        ask_max_height
+    fi
 
     # 5. Corregir orientación EXIF
     fix_orientation

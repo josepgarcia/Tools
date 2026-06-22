@@ -24,6 +24,8 @@ QUIET=0
 DRY_RUN=0
 SKIP_EXISTING=0
 NO_FOLDER=0
+RESIZE_IMAGES=1
+RESIZE_MODE_FROM_ARGS=0
 OUTPUT_EXT=""
 OUTPUT_EXT=""
 max_width=""
@@ -63,6 +65,7 @@ Opciones:
   --quiet             Salida mínima (mantiene registro en out/process.log)
   --dry-run           No ejecuta, solo muestra acciones planificadas
   --skip-existing     Omite si el archivo de salida es más nuevo que el de entrada
+  --no-resize         Convierte formato/calidad sin cambiar dimensiones
   --jpg-quality=NN    Calidad JPEG (0-100), defecto ${JPG_QUALITY}
   --webp-quality=NN   Calidad WebP (0-100), defecto ${WEBP_QUALITY}
   --avif-quality=NN   Calidad AVIF (0-100), defecto ${AVIF_QUALITY}
@@ -84,12 +87,13 @@ parse_args() {
             --quiet) QUIET=1 ;;
             --dry-run) DRY_RUN=1 ;;
             --skip-existing) SKIP_EXISTING=1 ;;
+            --no-resize) RESIZE_IMAGES=0; RESIZE_MODE_FROM_ARGS=1 ;;
             --jpg-quality=*) JPG_QUALITY="${arg#*=}" ;;
             --webp-quality=*) WEBP_QUALITY="${arg#*=}" ;;
             --avif-quality=*) AVIF_QUALITY="${arg#*=}" ;;
             --format=*) OUTPUT_EXT="${arg#*=}" ;;
-            --width=*) max_width="${arg#*=}" ;;
-            --height=*) max_height="${arg#*=}" ;;
+            --width=*) max_width="${arg#*=}"; RESIZE_IMAGES=1; RESIZE_MODE_FROM_ARGS=1 ;;
+            --height=*) max_height="${arg#*=}"; RESIZE_IMAGES=1; RESIZE_MODE_FROM_ARGS=1 ;;
             --no-folder) NO_FOLDER=1 ;;
             -h|--help) print_help; exit 0 ;;
             -*) ;;
@@ -283,7 +287,7 @@ rotate_artero_outputs() {
 # Función para solicitar el tipo de imagen
 ask_image_type() {
     echo ""
-    echo -e "${BLUE}¿Qué tipo de imagen deseas redimensionar?${NC}"
+    echo -e "${BLUE}¿Qué tipo de imagen deseas procesar?${NC}"
     echo "  1) JPG/JPEG"
     echo "  2) PNG"
     echo "  3) Ambos (JPG y PNG)"
@@ -331,6 +335,20 @@ collect_files_from_args() {
     files=("${FILE_LIST[@]}")
     IMAGE_EXTENSION="custom"
     success "Se recibieron ${#files[@]} archivo(s) por argumento."
+}
+
+# Función para preguntar si se debe cambiar el tamaño
+ask_resize_images() {
+    echo ""
+    read -p "$(echo -e ${BLUE}¿Quieres cambiar el tamaño de las imágenes? [s/N]:${NC} )" resize_confirm
+
+    if [[ "$resize_confirm" =~ ^[sS]$ ]]; then
+        RESIZE_IMAGES=1
+        success "Se cambiará el tamaño de las imágenes."
+    else
+        RESIZE_IMAGES=0
+        success "Solo se convertirá el formato; se conservarán las dimensiones originales."
+    fi
 }
 
 # Función para solicitar la anchura máxima
@@ -462,7 +480,11 @@ execute_cli() {
         info "Confirmación automática (--yes)."
     fi
 
-    info "Iniciando el proceso de redimensionado con sharp-cli..."
+    if [ $RESIZE_IMAGES -eq 1 ]; then
+        info "Iniciando el proceso de redimensionado con sharp-cli..."
+    else
+        info "Iniciando el proceso de conversión con sharp-cli..."
+    fi
     echo ""
 
     has_errors=0
@@ -500,24 +522,39 @@ execute_cli() {
             return 0
         fi
 
-        local w=$(sips -g pixelWidth "$input_file" 2>/dev/null | awk '/pixelWidth:/ {print $2}')
-        local h=$(sips -g pixelHeight "$input_file" 2>/dev/null | awk '/pixelHeight:/ {print $2}')
-
-        local resize_args=("resize")
-        if [[ -n "$max_width" && -n "$max_height" ]]; then
-            # Ambas dimensiones proporcionadas: Sharp ajustará para que quepa en el "cuadro"
-            resize_args+=("--width" "$max_width" "--height" "$max_height" "--fit" "inside")
-        elif [[ -n "$max_width" ]]; then
-            resize_args+=("--width" "$max_width")
-        elif [[ -n "$max_height" ]]; then
-            resize_args+=("--height" "$max_height")
+        local operation_args=()
+        if [ $RESIZE_IMAGES -eq 1 ]; then
+            operation_args=("resize")
+            if [[ -n "$max_width" && -n "$max_height" ]]; then
+                # Ambas dimensiones proporcionadas: Sharp ajustará para que quepa en el "cuadro"
+                operation_args+=("--width" "$max_width" "--height" "$max_height" "--fit" "inside")
+            elif [[ -n "$max_width" ]]; then
+                operation_args+=("--width" "$max_width")
+            elif [[ -n "$max_height" ]]; then
+                operation_args+=("--height" "$max_height")
+            fi
         fi
 
         if [ $DRY_RUN -eq 1 ]; then
-            info "[dry-run] sharp -i \"$input_file\" -o \"$out_file\" --format $OUTPUT_FORMAT -q $OUTPUT_QUALITY ${resize_args[*]}"
+            if [ $RESIZE_IMAGES -eq 1 ]; then
+                info "[dry-run] sharp -i \"$input_file\" -o \"$out_file\" --format $OUTPUT_FORMAT -q $OUTPUT_QUALITY ${operation_args[*]}"
+            else
+                info "[dry-run] sharp -i \"$input_file\" -o \"$out_file\" --format $OUTPUT_FORMAT -q $OUTPUT_QUALITY"
+            fi
         else
             local target_dir=$(dirname "$out_file")
-            if npx -y sharp-cli -i "$input_file" -o "$target_dir" --format "$OUTPUT_FORMAT" -q "$OUTPUT_QUALITY" "${resize_args[@]}" >/dev/null 2>&1; then
+            local sharp_ok=0
+            if [ $RESIZE_IMAGES -eq 1 ]; then
+                if npx -y sharp-cli -i "$input_file" -o "$target_dir" --format "$OUTPUT_FORMAT" -q "$OUTPUT_QUALITY" "${operation_args[@]}" >/dev/null 2>&1; then
+                    sharp_ok=1
+                fi
+            else
+                if npx -y sharp-cli -i "$input_file" -o "$target_dir" --format "$OUTPUT_FORMAT" -q "$OUTPUT_QUALITY" >/dev/null 2>&1; then
+                    sharp_ok=1
+                fi
+            fi
+
+            if [ $sharp_ok -eq 1 ]; then
                 # Si estamos en modo no-folder, sharp-cli habrá creado <base>.<ext> en $target_dir.
                 # Necesitamos renombrarlo a <name>_resized.<ext>
                 if [ $NO_FOLDER -eq 1 ]; then
@@ -552,7 +589,11 @@ execute_cli() {
         fi
         
         success "¡Proceso completado!"
-        success "Imágenes en '$OUTPUT_DIR/'"
+        if [ $RESIZE_IMAGES -eq 1 ]; then
+            success "Imágenes redimensionadas en '$OUTPUT_DIR/'"
+        else
+            success "Imágenes convertidas en '$OUTPUT_DIR/'"
+        fi
 
         # Notificación de fin (solo macOS)
         if [ $QUIET -eq 1 ] && command -v osascript &>/dev/null; then
@@ -609,11 +650,19 @@ main() {
         ask_output_type
     fi
 
-    if [ -z "$max_width" ]; then
+    if [ $RESIZE_MODE_FROM_ARGS -eq 0 ] && [ -z "$max_width" ] && [ -z "$max_height" ]; then
+        ask_resize_images
+    elif [ -n "$max_width" ] || [ -n "$max_height" ]; then
+        RESIZE_IMAGES=1
+    fi
+
+    if [ $RESIZE_IMAGES -eq 1 ] && [ -z "$max_width" ]; then
         ask_max_width
     fi
 
-    ask_max_height
+    if [ $RESIZE_IMAGES -eq 1 ]; then
+        ask_max_height
+    fi
 
     fix_orientation
     execute_cli

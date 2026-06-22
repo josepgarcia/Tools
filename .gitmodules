@@ -10,3 +10,9 @@
 [submodule "phpstan"]
 	path = phpstan
 	url = git@github.com:phpstan/phpstan.git
+[submodule "wpprobe"]
+	path = wpprobe
+	url = git@github.com:Chocapikk/wpprobe.git
+[submodule "AiGPT-WordPress-Exploitation-Framework"]
+	path = AiGPT-WordPress-Exploitation-Framework
+	url = git@github.com:AiGptCode/AiGPT-WordPress-Exploitation-Framework.git
